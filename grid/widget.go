@@ -19,9 +19,19 @@ import (
 // Widget renders a Controller using Gio's virtualized layout.List. Keep one
 // Widget instance for the screen lifetime so scroll and click state survive.
 type Widget struct {
-	Controller   *Controller
-	List         widget.List
+	Controller *Controller
+	List       widget.List
+	Horizontal widget.List
+
 	AdditiveSort bool
+	// ViewMode defaults to ViewAuto: cards on narrow screens, table otherwise.
+	ViewMode ViewMode
+	// CardBreakpoint defaults to 600dp.
+	CardBreakpoint unit.Dp
+	// CardTitleColumn and CardSummaryColumn customize the prominent card fields.
+	// By default they are OpenColumn/first visible and second visible.
+	CardTitleColumn   string
+	CardSummaryColumn string
 	// EnableSelection displays checkbox controls for bulk workflows.
 	EnableSelection bool
 	// OpenColumn makes that column's cell the row-open target.
@@ -29,15 +39,18 @@ type Widget struct {
 	OnRow       func(Row)
 	OnRowAction func(Row)
 
-	headers   map[string]*widget.Clickable
-	rows      map[string]*widget.Clickable
-	selects   map[string]*widget.Clickable
-	rowChecks map[string]*widget.Bool
-	rowOpens  map[string]time.Time
-	selectAll widget.Bool
-	actions   map[string]*widget.Clickable
-	retry     widget.Clickable
-	clearSel  widget.Clickable
+	headers          map[string]*widget.Clickable
+	rows             map[string]*widget.Clickable
+	selects          map[string]*widget.Clickable
+	rowChecks        map[string]*widget.Bool
+	rowOpens         map[string]time.Time
+	measuredOpen     map[string]bool
+	measuredOpenID   string
+	minimumOpenWidth unit.Dp
+	selectAll        widget.Bool
+	actions          map[string]*widget.Clickable
+	retry            widget.Clickable
+	clearSel         widget.Clickable
 }
 
 func NewWidget(controller *Controller) *Widget {
@@ -45,11 +58,14 @@ func NewWidget(controller *Controller) *Widget {
 		Controller:      controller,
 		EnableSelection: true,
 		List:            widget.List{List: layout.List{Axis: layout.Vertical}},
+		Horizontal:      widget.List{List: layout.List{Axis: layout.Horizontal}},
+		CardBreakpoint:  600,
 		headers:         make(map[string]*widget.Clickable),
 		rows:            make(map[string]*widget.Clickable),
 		selects:         make(map[string]*widget.Clickable),
 		rowChecks:       make(map[string]*widget.Bool),
 		rowOpens:        make(map[string]time.Time),
+		measuredOpen:    make(map[string]bool),
 		actions:         make(map[string]*widget.Clickable),
 	}
 }
@@ -60,23 +76,132 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 	}
 	snapshot := w.Controller.Snapshot()
 	visible := visibleColumns(snapshot.Columns)
+	if w.ResolvedViewMode(gtx) == ViewCards {
+		return w.layoutCards(gtx, theme, snapshot, visible)
+	}
+	return w.layoutTable(gtx, theme, snapshot, visible)
+}
+
+// ResolvedViewMode reports the actual presentation for the current viewport.
+func (w *Widget) ResolvedViewMode(gtx layout.Context) ViewMode {
+	pxPerDp := gtx.Metric.PxPerDp
+	if pxPerDp <= 0 {
+		pxPerDp = 1
+	}
+	width := unit.Dp(float32(gtx.Constraints.Max.X) / pxPerDp)
+	return ResolveViewMode(w.ViewMode, width, w.CardBreakpoint)
+}
+
+func (w *Widget) layoutTable(gtx layout.Context, theme *material.Theme, snapshot Snapshot, visible []Column) layout.Dimensions {
+	visible = w.expandOpenColumn(gtx, theme, snapshot, visible)
+	minimum := tableMinimumWidth(visible, w.EnableSelection)
+	if gtx.Constraints.Max.X >= gtx.Dp(minimum) {
+		return w.layoutTableContent(gtx, theme, snapshot, visible)
+	}
+	return material.List(theme, &w.Horizontal).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+		width := gtx.Dp(minimum)
+		gtx.Constraints.Min.X = width
+		gtx.Constraints.Max.X = width
+		return w.layoutTableContent(gtx, theme, snapshot, fixedTableColumns(visible))
+	})
+}
+
+func (w *Widget) expandOpenColumn(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) []Column {
+	openID := w.OpenColumn
+	if openID == "" && len(columns) > 0 {
+		openID = columns[0].ID
+	}
+	if openID == "" {
+		return columns
+	}
+	if w.measuredOpenID != openID {
+		w.measuredOpenID = openID
+		w.minimumOpenWidth = 0
+		w.measuredOpen = make(map[string]bool)
+	}
+	measure := func(key, value string, header bool) {
+		if w.measuredOpen[key] {
+			return
+		}
+		w.measuredOpen[key] = true
+		var label material.LabelStyle
+		if header {
+			label = material.Caption(theme, value)
+		} else {
+			label = material.Body2(theme, value)
+		}
+		label.MaxLines = 1
+		recording := op.Record(gtx.Ops)
+		measured := gtx
+		measured.Constraints.Min = image.Point{}
+		measured.Constraints.Max.X = 1 << 20
+		dimensions := label.Layout(measured)
+		_ = recording.Stop()
+		pxPerDp := gtx.Metric.PxPerDp
+		if pxPerDp <= 0 {
+			pxPerDp = 1
+		}
+		width := unit.Dp(float32(dimensions.Size.X)/pxPerDp) + 16
+		if width > w.minimumOpenWidth {
+			w.minimumOpenWidth = width
+		}
+	}
+	for _, column := range columns {
+		if column.ID == openID {
+			measure("header:"+column.Header, column.Header, true)
+			break
+		}
+	}
+	for _, row := range snapshot.Rows {
+		value := row.Cells[openID]
+		measure(row.ID+"\x00"+value, value, false)
+	}
+	return setColumnMinimumWidth(columns, openID, w.minimumOpenWidth)
+}
+
+func setColumnMinimumWidth(columns []Column, columnID string, minimum unit.Dp) []Column {
+	adjusted := append([]Column(nil), columns...)
+	for index := range adjusted {
+		if adjusted[index].ID == columnID && adjusted[index].Width < minimum {
+			adjusted[index].Width = minimum
+			adjusted[index].Flex = 0
+			break
+		}
+	}
+	return adjusted
+}
+
+func (w *Widget) layoutTableContent(gtx layout.Context, theme *material.Theme, snapshot Snapshot, visible []Column) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutHeader(gtx, theme, snapshot, visible) }),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if !w.EnableSelection || len(snapshot.Selection) == 0 {
-				return layout.Dimensions{}
-			}
-			if w.clearSel.Clicked(gtx) {
-				w.Controller.ClearSelection()
-			}
-			button := material.Button(theme, &w.clearSel, fmt.Sprintf("CLEAR %d SELECTED", len(snapshot.Selection)))
-			button.Background = color.NRGBA{R: 56, G: 76, B: 112, A: 255}
-			return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5)}.Layout(gtx, button.Layout)
-		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutClearSelection(gtx, theme, snapshot) }),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return w.layoutRows(gtx, theme, snapshot, visible)
 		}),
 	)
+}
+
+func (w *Widget) layoutCards(gtx layout.Context, theme *material.Theme, snapshot Snapshot, visible []Column) layout.Dimensions {
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutCardHeader(gtx, theme, snapshot, visible) }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutClearSelection(gtx, theme, snapshot) }),
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return w.layoutCardRows(gtx, theme, snapshot, visible)
+		}),
+	)
+}
+
+func (w *Widget) layoutClearSelection(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	if !w.EnableSelection || len(snapshot.Selection) == 0 {
+		return layout.Dimensions{}
+	}
+	if w.clearSel.Clicked(gtx) {
+		w.Controller.ClearSelection()
+	}
+	button := material.Button(theme, &w.clearSel, fmt.Sprintf("CLEAR %d SELECTED", len(snapshot.Selection)))
+	button.Background = color.NRGBA{R: 56, G: 76, B: 112, A: 255}
+	button.TextSize = unit.Sp(12)
+	return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, button.Layout)
 }
 
 func (w *Widget) layoutHeader(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) layout.Dimensions {
@@ -93,7 +218,7 @@ func (w *Widget) layoutHeader(gtx layout.Context, theme *material.Theme, snapsho
 			w.Controller.SetRowsSelected(rowIDs, w.selectAll.Value)
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return fixedCell(gtx, unit.Dp(80), material.CheckBox(theme, &w.selectAll, "Select").Layout)
+			return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, &w.selectAll, "").Layout)
 		}))
 	}
 	for _, column := range columns {
@@ -107,7 +232,14 @@ func (w *Widget) layoutHeader(gtx layout.Context, theme *material.Theme, snapsho
 			return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				textStyle := material.Caption(theme, label)
 				textStyle.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
-				textStyle.Alignment = text.Middle
+				textStyle.Alignment = text.Start
+				switch column.Align {
+				case AlignMiddle:
+					textStyle.Alignment = text.Middle
+				case AlignEnd:
+					textStyle.Alignment = text.End
+				}
+				textStyle.MaxLines = 1
 				return layout.UniformInset(unit.Dp(8)).Layout(gtx, textStyle.Layout)
 			})
 		}
@@ -140,16 +272,20 @@ func (w *Widget) layoutRows(gtx layout.Context, theme *material.Theme, snapshot 
 	}
 
 	extra := 0
-	if snapshot.HasMore || snapshot.State == Loading {
+	if len(snapshot.Rows) > 0 || snapshot.HasMore || snapshot.State == Loading {
 		extra = 1
 	}
 	count := len(snapshot.Rows) + extra
 	if w.List.Position.First+w.List.Position.Count >= len(snapshot.Rows)-5 && snapshot.HasMore && snapshot.State != Loading {
 		_ = w.Controller.LoadNext()
 	}
-	return w.List.Layout(gtx, count, func(gtx layout.Context, index int) layout.Dimensions {
+	return material.List(theme, &w.List).Layout(gtx, count, func(gtx layout.Context, index int) layout.Dimensions {
 		if index >= len(snapshot.Rows) {
-			return layout.UniformInset(unit.Dp(14)).Layout(gtx, material.Body2(theme, "Loading next page…").Layout)
+			message := "End of results"
+			if snapshot.HasMore || snapshot.State == Loading {
+				message = "Loading more records…"
+			}
+			return layout.UniformInset(unit.Dp(14)).Layout(gtx, material.Body2(theme, message).Layout)
 		}
 		return w.layoutRow(gtx, theme, snapshot.Rows[index], columns, snapshot.Selection[snapshot.Rows[index].ID], index)
 	})

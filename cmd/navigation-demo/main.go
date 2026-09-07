@@ -46,35 +46,39 @@ type externalResult struct {
 }
 
 type demoUI struct {
-	window         *app.Window
-	theme          *material.Theme
-	table          *router.Table
-	router         *router.Router
-	statePath      string
-	lastVersion    uint64
-	listState      *listScreenState
-	rows           [100]widget.Clickable
-	back           widget.Clickable
-	newIncident    widget.Clickable
-	deepLink       widget.Clickable
-	notification   widget.Clickable
-	openGrid       widget.Clickable
-	gridDemo       *gridDemo
-	formDemos      map[string]*incidentFormDemo
-	lookup         *lookupDemo
-	restore        widget.Clickable
-	edit           widget.Clickable
-	clean          widget.Clickable
-	modalCancel    widget.Clickable
-	overlayBlocker widget.Clickable
-	confirmLeave   widget.Clickable
-	confirmStay    widget.Clickable
-	dirty          bool
-	confirming     bool
-	status         string
-	statusOK       bool
-	backTag        struct{}
-	externalNav    chan externalResult
+	window          *app.Window
+	theme           *material.Theme
+	table           *router.Table
+	router          *router.Router
+	statePath       string
+	lastVersion     uint64
+	listState       *listScreenState
+	rows            [100]widget.Clickable
+	back            widget.Clickable
+	newIncident     widget.Clickable
+	deepLink        widget.Clickable
+	notification    widget.Clickable
+	openGrid        widget.Clickable
+	gridDemo        *gridDemo
+	formDemos       map[string]*incidentFormDemo
+	lookup          *lookupDemo
+	restore         widget.Clickable
+	edit            widget.Clickable
+	clean           widget.Clickable
+	modalCancel     widget.Clickable
+	overlayBlocker  widget.Clickable
+	confirmLeave    widget.Clickable
+	confirmStay     widget.Clickable
+	dirty           bool
+	confirming      bool
+	status          string
+	statusOK        bool
+	lastStatus      string
+	statusSince     time.Time
+	statusDismissed bool
+	statusDismiss   widget.Clickable
+	backTag         struct{}
+	externalNav     chan externalResult
 }
 
 func main() {
@@ -200,11 +204,20 @@ func (u *demoUI) layout(gtx layout.Context) layout.Dimensions {
 		}
 	}
 
+	if u.status != u.lastStatus {
+		u.lastStatus = u.status
+		u.statusSince = gtx.Now
+		u.statusDismissed = false
+	}
 	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(u.appBar),
 		layout.Rigid(u.statusBar),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(16)).Layout(gtx, u.content)
+			inset := unit.Dp(16)
+			if gtx.Constraints.Max.Y < gtx.Dp(unit.Dp(520)) {
+				inset = 8
+			}
+			return layout.UniformInset(inset).Layout(gtx, u.content)
 		}),
 	)
 	if len(u.router.Modals()) > 0 {
@@ -229,44 +242,90 @@ func (u *demoUI) layout(gtx layout.Context) layout.Dimensions {
 }
 
 func (u *demoUI) appBar(gtx layout.Context) layout.Dimensions {
-	paint.FillShape(gtx.Ops, card, clip.Rect{Max: gtx.Constraints.Max}.Op())
-	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if len(u.router.Stack()) <= 1 && len(u.router.Modals()) == 0 {
-					return layout.Dimensions{Size: image.Pt(gtx.Dp(unit.Dp(48)), gtx.Dp(unit.Dp(48)))}
-				}
-				if u.back.Clicked(gtx) {
-					u.navigateBack()
-				}
-				button := material.Button(u.theme, &u.back, "‹ BACK")
-				button.Background = color.NRGBA{}
-				button.Color = primary
-				return button.Layout(gtx)
-			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				label := material.H6(u.theme, "Navigation Lab")
-				label.Alignment = text.Middle
-				return label.Layout(gtx)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Caption(u.theme, fmt.Sprintf("%d route(s)", len(u.router.Stack())))
-				label.Color = muted
-				return label.Layout(gtx)
-			}),
-		)
+	compact := gtx.Constraints.Max.Y < gtx.Dp(unit.Dp(600))
+	verticalInset := unit.Dp(8)
+	buttonSize := unit.Dp(48)
+	if compact {
+		verticalInset = 2
+		buttonSize = 40
+	}
+	return u.surface(gtx, 0, card, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: verticalInset, Bottom: verticalInset, Left: unit.Dp(8), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if len(u.router.Stack()) <= 1 && len(u.router.Modals()) == 0 {
+						return layout.Dimensions{Size: image.Pt(gtx.Dp(buttonSize), gtx.Dp(buttonSize))}
+					}
+					if u.back.Clicked(gtx) {
+						u.navigateBack()
+					}
+					button := material.Button(u.theme, &u.back, "‹")
+					button.Background = color.NRGBA{}
+					button.Color = primary
+					button.TextSize = unit.Sp(24)
+					button.Inset = layout.UniformInset(unit.Dp(5))
+					return button.Layout(gtx)
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					var label material.LabelStyle
+					if compact {
+						label = material.Body1(u.theme, "Gio Kit CRUD Lab")
+					} else {
+						label = material.H6(u.theme, "Gio Kit CRUD Lab")
+					}
+					label.Alignment = text.Middle
+					label.MaxLines = 1
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.Caption(u.theme, fmt.Sprintf("%d", len(u.router.Stack())))
+					label.Color = muted
+					return label.Layout(gtx)
+				}),
+			)
+		})
 	})
 }
 
 func (u *demoUI) statusBar(gtx layout.Context) layout.Dimensions {
+	if u.status == "" || u.statusDismissed {
+		return layout.Dimensions{}
+	}
+	if u.statusDismiss.Clicked(gtx) {
+		u.statusDismissed = true
+		return layout.Dimensions{}
+	}
+	if u.statusOK && !u.statusSince.IsZero() {
+		expires := u.statusSince.Add(4 * time.Second)
+		if !gtx.Now.Before(expires) {
+			u.statusDismissed = true
+			return layout.Dimensions{}
+		}
+		gtx.Execute(op.InvalidateCmd{At: expires})
+	}
 	bg := success
 	if !u.statusOK {
 		bg = danger
 	}
-	paint.FillShape(gtx.Ops, bg, clip.Rect{Max: gtx.Constraints.Max}.Op())
-	label := material.Body2(u.theme, u.status)
-	label.Color = card
-	return layout.UniformInset(unit.Dp(9)).Layout(gtx, label.Layout)
+	return u.surface(gtx, 0, bg, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5), Left: unit.Dp(10), Right: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					label := material.Caption(u.theme, u.status)
+					label.Color = card
+					label.MaxLines = 1
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					button := material.Button(u.theme, &u.statusDismiss, "×")
+					button.Background = color.NRGBA{}
+					button.Color = card
+					button.Inset = layout.UniformInset(unit.Dp(3))
+					return button.Layout(gtx)
+				}),
+			)
+		})
+	})
 }
 
 func (u *demoUI) content(gtx layout.Context) layout.Dimensions {
@@ -592,25 +651,26 @@ func (u *demoUI) infoCard(gtx layout.Context, title, body string) layout.Dimensi
 }
 
 func (u *demoUI) row(gtx layout.Context, title, subtitle string) layout.Dimensions {
-	paint.FillShape(gtx.Ops, card, clip.Rect{Max: gtx.Constraints.Max}.Op())
-	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(material.Body1(u.theme, title).Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						label := material.Caption(u.theme, subtitle)
-						label.Color = muted
-						return label.Layout(gtx)
-					}),
-				)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.H6(u.theme, "›")
-				label.Color = primary
-				return label.Layout(gtx)
-			}),
-		)
+	return u.surface(gtx, 0, card, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(material.Body1(u.theme, title).Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							label := material.Caption(u.theme, subtitle)
+							label.Color = muted
+							return label.Layout(gtx)
+						}),
+					)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.H6(u.theme, "›")
+					label.Color = primary
+					return label.Layout(gtx)
+				}),
+			)
+		})
 	})
 }
 

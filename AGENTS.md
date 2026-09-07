@@ -37,7 +37,7 @@ This repository is built directly under Termux on Android/arm64. Preserve the kn
 - Termux-native `/data/data/com.termux/files/usr/bin/d8`, `apksigner`, and `zipalign` are required by the patched build tooling.
 - Android build target: `arm64`; use the NDK sysroot and API-24 aarch64 library path as demonstrated by Vingo.
 
-Do not replace the patched `gogio` flow with an upstream binary and do not upgrade SDK, NDK, build-tools, Gio, Go language version, or packaging tools casually. Record any necessary deviation here and in the build script, and prove it by producing, signing, installing, and launching an APK on this device. Never commit keystores or signing secrets; debug signing is acceptable only for local testing.
+Do not replace the patched `gogio` flow with an upstream binary and do not upgrade SDK, NDK, build-tools, Gio, Go language version, or packaging tools casually. Record any necessary deviation here and in the build script, and prove the build and signing steps locally. The user is responsible for installing and launching APKs on the device. Never commit keystores or signing secrets; debug signing is acceptable only for local testing.
 
 ## Build and Verification
 
@@ -45,7 +45,7 @@ Provide repository-owned scripts derived from the working Vingo approach; caller
 
 Run focused pure-Go package tests throughout development. Full host `go test ./...` or `go vet ./...` can fail in Termux because Gio host compilation needs unavailable Vulkan headers; preserve the exact failure and run unaffected package tests separately. This limitation is not an Android-build failure, but neither is a partial suite a pass.
 
-For every material UI change, build the APK, install it, launch it, and visually exercise the affected workflow on-device. The release script alone does not install, launch, or visually validate the app. Test Android back handling, rotation/resize where supported, process-state serialization/restoration, touch and long-press interactions, scrolling under large data sets, keyboard input, and error/retry behavior.
+For every material UI change, build, sign, verify, and copy the APK to `/storage/emulated/0/Download/`, then stop and ask the user to install, launch, and visually exercise the affected workflow on-device. Agents must not attempt automatic APK installation or launch through ADB, `pm`, `am`, `monkey`, Termux intents, or any equivalent mechanism. Test guidance must cover Android back handling, rotation/resize where supported, process-state serialization/restoration, touch and long-press interactions, scrolling under large data sets, keyboard input, and error/retry behavior.
 
 The only authoritative functional test in this environment is the mobile test app packaged as a release APK. Treat each of the three major requirements as a user-test gate: (1) Navigation & Routing, (2) Data Grid, and (3) Data-Driven Form Abstraction. After implementing each area, build and sign a release APK of the test app, verify it, copy it to `/storage/emulated/0/Download/` under a stable project-specific name, and stop for the user to install and test it. Provide a concise checklist covering that requirement’s acceptance criteria and wait for the user’s results before proceeding to the next requirement. Unit and integration tests remain required, but they do not replace this APK/device test.
 

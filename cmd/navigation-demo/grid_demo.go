@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -63,6 +64,8 @@ type gridDemo struct {
 	empty       widget.Clickable
 	fail        widget.Clickable
 	addSort     widget.Clickable
+	showCards   widget.Clickable
+	showTable   widget.Clickable
 	additive    bool
 }
 
@@ -105,9 +108,9 @@ func newGridDemo(window *app.Window, dataDir string) *gridDemo {
 		}
 		flaky := &flakySource{source: source, delay: 350 * time.Millisecond}
 		controller, err := grid.NewController([]grid.Column{
-			{ID: "number", Header: "Number", Width: 105, Sortable: true, Visible: true, Filter: grid.FilterText},
+			{ID: "number", Header: "Number", Width: 112, Sortable: true, Visible: true, Filter: grid.FilterText},
 			{ID: "description", Header: "Description", Flex: 2, Sortable: true, Visible: true, Filter: grid.FilterText},
-			{ID: "priority", Header: "P", Width: 44, Align: grid.AlignMiddle, Sortable: true, Visible: true, Filter: grid.FilterChoice},
+			{ID: "priority", Header: "Priority", Width: 88, Align: grid.AlignStart, Sortable: true, Visible: true, Filter: grid.FilterChoice},
 			{ID: "state", Header: "State", Flex: 1, Sortable: true, Visible: true, Filter: grid.FilterChoice},
 		}, flaky, 50, window.Invalidate)
 		if err == nil {
@@ -130,6 +133,8 @@ func (d *gridDemo) poll(ui *demoUI) {
 		if d.controller != nil {
 			d.widget = grid.NewWidget(d.controller)
 			d.widget.OpenColumn = "number"
+			d.widget.CardTitleColumn = "number"
+			d.widget.CardSummaryColumn = "description"
 			d.widget.OnRow = func(row grid.Row) { d.openRow(ui, row) }
 		}
 	default:
@@ -157,88 +162,139 @@ func (d *gridDemo) Layout(gtx layout.Context, ui *demoUI) layout.Dimensions {
 		return ui.infoCard(gtx, "SQLite setup failed", d.setupErr.Error())
 	}
 	if d.controller == nil {
-		return layout.Center.Layout(gtx, material.Body1(ui.theme, "Creating the SQLite database and 10,000 incidents…").Layout)
+		return layout.Center.Layout(gtx, material.Body1(ui.theme, "Creating 10,000 SQLite incidents…").Layout)
 	}
 	snapshot := d.controller.Snapshot()
+	view := d.widget.ResolvedViewMode(gtx)
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return ui.heading(gtx, "SQLite Incident Grid", "10,000 rows • SQL filtering/sorting • 50-row async pages")
+			return d.layoutTitleAndView(gtx, ui, view)
 		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return d.layoutSearch(gtx, ui) }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return d.layoutPresets(gtx, ui, snapshot) }),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					editor := material.Editor(ui.theme, &d.filter, "Description contains…")
-					return ui.panel(gtx, editor.Layout)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(6)}.Layout(gtx) }),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.applyFilter.Clicked(gtx) {
-						_ = d.controller.SetFilter("description", grid.Filter{Operator: grid.Contains, Value: d.filter.Text()})
-						d.widget.List.Position = layout.Position{}
-					}
-					return material.Button(ui.theme, &d.applyFilter, "FILTER").Layout(gtx)
-				}),
-			)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.clearFilter.Clicked(gtx) {
-						d.filter.SetText("")
-						_ = d.controller.SetFilters(nil)
-						d.widget.List.Position = layout.Position{}
-					}
-					button := material.Button(ui.theme, &d.clearFilter, "ALL 10K")
-					button.TextSize = 11
-					return button.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.empty.Clicked(gtx) {
-						d.filter.SetText("no-such-incident-value")
-						_ = d.controller.SetFilter("description", grid.Filter{Operator: grid.Contains, Value: d.filter.Text()})
-					}
-					button := material.Button(ui.theme, &d.empty, "EMPTY")
-					button.TextSize = 11
-					return button.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.fail.Clicked(gtx) {
-						d.flaky.failNext.Store(true)
-						_ = d.controller.Refresh()
-					}
-					button := material.Button(ui.theme, &d.fail, "ERROR")
-					button.TextSize = 11
-					return button.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.addSort.Clicked(gtx) {
-						d.additive = !d.additive
-						d.widget.AdditiveSort = d.additive
-					}
-					label := "1 SORT"
-					if d.additive {
-						label = "+ SORT"
-					}
-					button := material.Button(ui.theme, &d.addSort, label)
-					button.TextSize = 11
-					return button.Layout(gtx)
-				}),
-			)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			loaded := fmt.Sprintf("Loaded %d / %d • selected %d", len(snapshot.Rows), snapshot.Total, len(snapshot.Selection))
+			loaded := fmt.Sprintf("Showing %d of %d records", len(snapshot.Rows), snapshot.Total)
 			if snapshot.Total < 0 {
-				loaded = fmt.Sprintf("Loading SQL query… • selected %d", len(snapshot.Selection))
+				loaded = "Running SQLite query…"
+			}
+			if len(snapshot.Selection) > 0 {
+				loaded += fmt.Sprintf(" • %d selected", len(snapshot.Selection))
 			}
 			label := material.Caption(ui.theme, loaded)
-			label.Color = muted
-			return layout.Inset{Top: unit.Dp(5), Bottom: unit.Dp(5)}.Layout(gtx, label.Layout)
+			label.Color = ink
+			return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(5)}.Layout(gtx, label.Layout)
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return d.widget.Layout(gtx, ui.theme) }),
 	)
+}
+
+func (d *gridDemo) layoutTitleAndView(gtx layout.Context, ui *demoUI, view grid.ViewMode) layout.Dimensions {
+	if d.showCards.Clicked(gtx) {
+		d.widget.ViewMode = grid.ViewCards
+		view = grid.ViewCards
+	}
+	if d.showTable.Clicked(gtx) {
+		d.widget.ViewMode = grid.ViewTable
+		view = grid.ViewTable
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.H6(ui.theme, "SQLite incidents")
+					label.MaxLines = 1
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.Caption(ui.theme, "10,000 records • SQL-backed • 50 per page")
+					label.Color = muted
+					label.MaxLines = 1
+					return label.Layout(gtx)
+				}),
+			)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{}.Layout(gtx,
+				layout.Rigid(d.viewButton(ui, &d.showCards, "CARDS", view == grid.ViewCards)),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(4)}.Layout(gtx) }),
+				layout.Rigid(d.viewButton(ui, &d.showTable, "TABLE", view == grid.ViewTable)),
+			)
+		}),
+	)
+}
+
+func (d *gridDemo) layoutSearch(gtx layout.Context, ui *demoUI) layout.Dimensions {
+	if d.applyFilter.Clicked(gtx) {
+		_ = d.controller.SetFilter("description", grid.Filter{Operator: grid.Contains, Value: d.filter.Text()})
+		d.widget.List.Position = layout.Position{}
+	}
+	return layout.Inset{Top: unit.Dp(7), Bottom: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return ui.surface(gtx, 8, card, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						editor := material.Editor(ui.theme, &d.filter, "Search descriptions")
+						editor.TextSize = unit.Sp(16)
+						return editor.Layout(gtx)
+					}),
+					layout.Rigid(d.actionButton(ui, &d.applyFilter, "APPLY", true, false)),
+				)
+			})
+		})
+	})
+}
+
+func (d *gridDemo) layoutPresets(gtx layout.Context, ui *demoUI, snapshot grid.Snapshot) layout.Dimensions {
+	if d.clearFilter.Clicked(gtx) {
+		d.filter.SetText("")
+		_ = d.controller.SetFilters(nil)
+		d.widget.List.Position = layout.Position{}
+	}
+	if d.empty.Clicked(gtx) {
+		d.filter.SetText("no-such-incident-value")
+		_ = d.controller.SetFilter("description", grid.Filter{Operator: grid.Contains, Value: d.filter.Text()})
+		d.widget.List.Position = layout.Position{}
+	}
+	if d.fail.Clicked(gtx) {
+		d.flaky.failNext.Store(true)
+		_ = d.controller.Refresh()
+	}
+	if d.addSort.Clicked(gtx) {
+		d.additive = !d.additive
+		d.widget.AdditiveSort = d.additive
+	}
+	_, filtered := snapshot.Filters["description"]
+	emptyActive := d.filter.Text() == "no-such-incident-value"
+	return layout.Flex{}.Layout(gtx,
+		layout.Flexed(1, d.actionButton(ui, &d.clearFilter, "ALL", !filtered, false)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(4)}.Layout(gtx) }),
+		layout.Flexed(1, d.actionButton(ui, &d.empty, "NO RESULTS", emptyActive, false)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(4)}.Layout(gtx) }),
+		layout.Flexed(1, d.actionButton(ui, &d.fail, "TEST ERROR", false, true)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(4)}.Layout(gtx) }),
+		layout.Flexed(1, d.actionButton(ui, &d.addSort, "MULTI-SORT", d.additive, false)),
+	)
+}
+
+func (d *gridDemo) actionButton(ui *demoUI, click *widget.Clickable, label string, selected, destructive bool) layout.Widget {
+	return func(gtx layout.Context) layout.Dimensions {
+		button := material.Button(ui.theme, click, label)
+		button.TextSize = unit.Sp(10)
+		button.Inset = layout.Inset{Top: unit.Dp(7), Bottom: unit.Dp(7), Left: unit.Dp(3), Right: unit.Dp(3)}
+		button.Background = color.NRGBA{R: 226, G: 234, B: 249, A: 255}
+		button.Color = ink
+		if selected {
+			button.Background = primary
+			button.Color = card
+		} else if destructive {
+			button.Color = danger
+		}
+		return button.Layout(gtx)
+	}
+}
+
+func (d *gridDemo) viewButton(ui *demoUI, click *widget.Clickable, label string, selected bool) layout.Widget {
+	return d.actionButton(ui, click, label, selected, false)
 }
 
 func (d *gridDemo) Close() {

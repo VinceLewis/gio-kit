@@ -67,6 +67,8 @@ defer controller.Close()
 
 table := grid.NewWidget(controller)
 table.OpenColumn = "number"
+table.CardTitleColumn = "number"
+table.CardSummaryColumn = "description"
 table.OnRow = func(row grid.Row) {
     log.Println("open record", row.ID)
 }
@@ -89,6 +91,12 @@ Current interactions:
 - Rows use checkboxes for selection.
 - The Select header checkbox selects or clears all currently loaded rows.
 - Selection is keyed by row ID and survives paging.
+- `ViewAuto` (the default) renders cards below `CardBreakpoint` (600dp) and a
+  table at wider sizes; set `ViewMode` to `ViewCards` or `ViewTable` for a user
+  override.
+- Narrow forced tables scroll horizontally with one shared header/body offset.
+- Card and table presentations share the same virtual list, query, sort,
+  selection, paging, retry, and row-open callbacks.
 - `EnableSelection = false` hides selection for lookup-only grids.
 - Column order, width, and visibility preferences are serializable.
 - Loading, empty, error/retry, cancellation, and stale-result states are

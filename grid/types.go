@@ -18,6 +18,31 @@ const (
 	AlignEnd
 )
 
+// ViewMode controls how rows are presented. ViewAuto uses cards below the
+// widget breakpoint and a table at wider sizes.
+type ViewMode uint8
+
+const (
+	ViewAuto ViewMode = iota
+	ViewTable
+	ViewCards
+)
+
+// ResolveViewMode makes responsive view selection available to applications
+// that want their view-toggle state to match Widget exactly.
+func ResolveViewMode(mode ViewMode, width, breakpoint unit.Dp) ViewMode {
+	if mode == ViewTable || mode == ViewCards {
+		return mode
+	}
+	if breakpoint <= 0 {
+		breakpoint = 600
+	}
+	if width < breakpoint {
+		return ViewCards
+	}
+	return ViewTable
+}
+
 type FilterKind uint8
 
 const (

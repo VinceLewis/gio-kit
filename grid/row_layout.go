@@ -32,7 +32,7 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, row Row, c
 				w.Controller.ToggleSelection(row.ID)
 			}
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return fixedCell(gtx, unit.Dp(80), material.CheckBox(theme, check, "").Layout)
+				return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, check, "").Layout)
 			}))
 		}
 		for _, column := range columns {
@@ -42,6 +42,7 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, row Row, c
 					label := material.Body2(theme, row.Cells[column.ID])
 					label.MaxLines = 2
 					if column.ID == openColumn {
+						label.MaxLines = 1
 						label.Color = color.NRGBA{R: 39, G: 92, B: 225, A: 255}
 					}
 					switch column.Align {
