@@ -1,0 +1,9 @@
+/build/
+*.apk
+*.aab
+*.idsig
+*.so
+*.keystore
+*.db
+.idea/
+.vscode/
