@@ -147,14 +147,11 @@ func (w *Widget) layoutCard(gtx layout.Context, theme *material.Theme, row Row, 
 		w.Controller.ToggleSelection(row.ID)
 	}
 	rowClick := w.row(row.ID)
-	if rowClick.Clicked(gtx) && w.OnRow != nil {
-		w.OnRow(row)
-	}
 	bg := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	if selected {
 		bg = color.NRGBA{R: 225, G: 237, B: 255, A: 255}
 	}
-	return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	dims := layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return surface(gtx, bg, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -202,6 +199,15 @@ func (w *Widget) layoutCard(gtx layout.Context, theme *material.Theme, row Row, 
 			)
 		})
 	})
+	for _, press := range rowClick.History() {
+		if !press.Cancelled && !press.End.IsZero() && press.End.After(w.rowOpens[row.ID]) {
+			w.rowOpens[row.ID] = press.End
+			if w.OnRow != nil {
+				w.OnRow(row)
+			}
+		}
+	}
+	return dims
 }
 
 func (w *Widget) cardFieldIDs(columns []Column) (title, summary string) {

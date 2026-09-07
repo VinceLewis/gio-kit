@@ -237,6 +237,7 @@ func (u *demoUI) layout(gtx layout.Context) layout.Dimensions {
 				u.status, u.statusOK = "Could not persist route state: "+err.Error(), false
 			}
 		}
+		gtx.Execute(op.InvalidateCmd{})
 	}
 	return dims
 }
