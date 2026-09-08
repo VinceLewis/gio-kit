@@ -15,6 +15,8 @@ const (
 	FieldDateTime
 	FieldChoice
 	FieldReference
+	FieldTime
+	FieldAttachment
 )
 
 type Choice struct {

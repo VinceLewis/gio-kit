@@ -123,3 +123,17 @@ func TestF9SecondRecordUsesOnlySchema(t *testing.T) {
 		t.Fatalf("new record schema: %v", err)
 	}
 }
+
+func TestTimeAndAttachmentFieldsRetainValues(t *testing.T) {
+	f, err := New([]FieldSchema{{ID: "at", Type: FieldTime}, {ID: "file", Type: FieldAttachment}}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Load(map[string]string{"at": "14:30", "file": "document.pdf"}); err != nil {
+		t.Fatal(err)
+	}
+	values := f.Snapshot().Values
+	if values["at"] != "14:30" || values["file"] != "document.pdf" {
+		t.Fatalf("values = %#v", values)
+	}
+}

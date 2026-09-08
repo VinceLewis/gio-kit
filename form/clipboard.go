@@ -40,7 +40,7 @@ func selectWord(editor *widget.Editor) {
 
 func isTextField(kind FieldType) bool {
 	switch kind {
-	case FieldText, FieldTextArea, FieldNumber, FieldDate, FieldDateTime:
+	case FieldText, FieldTextArea, FieldNumber, FieldDate, FieldDateTime, FieldTime:
 		return true
 	default:
 		return false

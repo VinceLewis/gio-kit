@@ -20,6 +20,7 @@ import (
 type Widget struct {
 	Form            *Form
 	OnReference     func(FieldSchema)
+	OnAttachment    func(FieldSchema)
 	OnSaveAndClose  func()
 	OnInvalid       func()
 	Editors         map[string]*widget.Editor
@@ -198,6 +199,23 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 					layout.Flexed(1, material.Body1(theme, name).Layout),
 					layout.Rigid(material.Caption(theme, "LOOK UP").Layout),
+				)
+			})
+		})
+	case FieldAttachment:
+		button := w.button(field.Schema.ID)
+		if button.Clicked(gtx) && !field.ReadOnly && w.OnAttachment != nil {
+			w.OnAttachment(field.Schema)
+		}
+		name := field.Value
+		if name == "" {
+			name = "No attachment selected"
+		}
+		return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
+			return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+					layout.Flexed(1, material.Body1(theme, name).Layout),
+					layout.Rigid(material.Caption(theme, "CHOOSE").Layout),
 				)
 			})
 		})

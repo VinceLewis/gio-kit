@@ -40,6 +40,8 @@ func incidentSchema() []formkit.FieldSchema {
 		{ID: "priority", Label: "Priority (1–4)", Type: formkit.FieldNumber, Mandatory: true, Validators: []formkit.Validator{formkit.NumberRange(1, 4)}},
 		{ID: "active", Label: "Active", Type: formkit.FieldBoolean, DefaultValue: "true"},
 		{ID: "opened_at", Label: "Opened at", Type: formkit.FieldDateTime, Mandatory: true},
+		{ID: "response_time", Label: "Response time", Type: formkit.FieldTime},
+		{ID: "evidence", Label: "Evidence", Type: formkit.FieldAttachment},
 		{ID: "state", Label: "State", Type: formkit.FieldChoice, Choices: []formkit.Choice{
 			{Value: "New", Label: "New"}, {Value: "In Progress", Label: "In Progress"},
 			{Value: "On Hold", Label: "On Hold"}, {Value: "Resolved", Label: "Resolved"},
@@ -160,6 +162,11 @@ func (u *demoUI) newIncidentForm(route router.Route) (*incidentFormDemo, error) 
 	}
 	demo.widget.OnReference = func(field formkit.FieldSchema) {
 		u.openLookup(demo, field.ID)
+	}
+	demo.widget.OnAttachment = func(field formkit.FieldSchema) {
+		_ = demo.form.SetValue(field.ID, "example-document.pdf")
+		u.status, u.statusOK = "Attachment picker callback invoked.", true
+		u.window.Invalidate()
 	}
 	demo.widget.OnInvalid = func() {
 		u.status, u.statusOK = "Fix errors before saving.", false
