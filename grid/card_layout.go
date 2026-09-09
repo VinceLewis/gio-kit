@@ -102,8 +102,9 @@ func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, sna
 func (w *Widget) layoutCardRows(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) layout.Dimensions {
 	if snapshot.State == Failed {
 		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			detail := material.Body1(theme, failureMessage(snapshot))
 			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(material.Body1(theme, "Could not load records.").Layout),
+				layout.Rigid(detail.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if w.retry.Clicked(gtx) {
 						_ = w.Controller.Retry()
@@ -114,7 +115,7 @@ func (w *Widget) layoutCardRows(gtx layout.Context, theme *material.Theme, snaps
 		})
 	}
 	if snapshot.State == Empty {
-		return layout.Center.Layout(gtx, material.Body1(theme, "No records match this filter.").Layout)
+		return layout.Center.Layout(gtx, material.Body1(theme, emptyMessage(snapshot)).Layout)
 	}
 	if len(snapshot.Rows) == 0 && snapshot.State == Loading {
 		return layout.Center.Layout(gtx, material.Body1(theme, "Loading records…").Layout)
@@ -137,6 +138,13 @@ func (w *Widget) layoutCardRows(gtx layout.Context, theme *material.Theme, snaps
 		}
 		return w.layoutCard(gtx, theme, snapshot.Rows[index], columns, snapshot.Selection[snapshot.Rows[index].ID])
 	})
+}
+
+func emptyMessage(snapshot Snapshot) string {
+	if len(snapshot.Filters) == 0 {
+		return "No records yet."
+	}
+	return "No records match the current filters."
 }
 
 func (w *Widget) layoutCard(gtx layout.Context, theme *material.Theme, row Row, columns []Column, selected bool) layout.Dimensions {

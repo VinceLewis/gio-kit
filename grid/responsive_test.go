@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"errors"
 	"testing"
 
 	"gioui.org/unit"
@@ -25,6 +26,18 @@ func TestG2ResponsiveViewMode(t *testing.T) {
 				t.Fatalf("ResolveViewMode() = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestGridStateMessagesDistinguishEmptyAndFilteredResults(t *testing.T) {
+	if got := emptyMessage(Snapshot{}); got != "No records yet." {
+		t.Fatalf("unfiltered empty message = %q", got)
+	}
+	if got := emptyMessage(Snapshot{Filters: map[string]Filter{"name": {Operator: Contains, Value: "x"}}}); got != "No records match the current filters." {
+		t.Fatalf("filtered empty message = %q", got)
+	}
+	if got := failureMessage(Snapshot{State: Failed, Err: errors.New("policy denied")}); got != "Could not load records. policy denied" {
+		t.Fatalf("failed message = %q", got)
 	}
 }
 

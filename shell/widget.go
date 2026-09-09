@@ -194,6 +194,7 @@ func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item
 
 func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Control, top bool) layout.Dimensions {
 	click := w.clickable(w.controls, control.ID)
+	disabled := !control.Enabled
 	if !control.Enabled {
 		gtx = gtx.Disabled()
 	}
@@ -208,7 +209,16 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 		button.Background = color.NRGBA{}
 		button.Color = theme.Palette.Fg
 	}
-	return button.Layout(gtx)
+	if top || !disabled || control.DisabledReason == "" {
+		return button.Layout(gtx)
+	}
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(button.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			message := material.Caption(theme, control.DisabledReason)
+			return layout.Inset{Left: unit.Dp(16), Right: unit.Dp(16), Bottom: unit.Dp(8)}.Layout(gtx, message.Layout)
+		}),
+	)
 }
 
 func (w *Widget) handleClicks(gtx layout.Context) {

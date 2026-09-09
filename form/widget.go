@@ -405,6 +405,27 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			w.OnInvalid()
 		}
 	}
+	if stackFormActions(gtx) {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{}.Layout(gtx,
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, "CANCEL", snapshot.Submitting, false)),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.save, "SAVE", !snapshot.Valid || snapshot.Submitting, false)),
+				)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{}.Layout(gtx, layout.Flexed(1, w.actionButton(gtx, theme, &w.saveClose, "SAVE & CLOSE", !snapshot.Valid || snapshot.Submitting, true)))
+				})
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return w.actionStatus(gtx, theme, snapshot)
+				})
+			}),
+		)
+	}
 	children := []layout.FlexChild{
 		layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, "CANCEL", snapshot.Submitting, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -415,15 +436,7 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
 		}),
 		layout.Flexed(1.35, w.actionButton(gtx, theme, &w.saveClose, "SAVE & CLOSE", !snapshot.Valid || snapshot.Submitting, true)),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			mark := "CLEAN"
-			if snapshot.Dirty {
-				mark = "DIRTY"
-			}
-			label := material.Caption(theme, mark)
-			label.Alignment = text.Middle
-			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, label.Layout)
-		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.dirtyStatus(gtx, theme, snapshot) }),
 	}
 	if w.OnDelete != nil {
 		label := w.DeleteLabel
@@ -435,6 +448,36 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
+func stackFormActions(gtx layout.Context) bool {
+	return gtx.Constraints.Max.X < gtx.Dp(unit.Dp(520))
+}
+
+func (w *Widget) actionStatus(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	children := []layout.FlexChild{layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+		return w.dirtyStatus(gtx, theme, snapshot)
+	})}
+	if w.OnDelete != nil {
+		label := w.DeleteLabel
+		if label == "" {
+			label = "DELETE"
+		}
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, material.Button(theme, &w.delete, label).Layout)
+		}))
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
+func (w *Widget) dirtyStatus(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	mark := "CLEAN"
+	if snapshot.Dirty {
+		mark = "DIRTY"
+	}
+	label := material.Caption(theme, mark)
+	label.Alignment = text.Middle
+	return layout.Inset{Left: unit.Dp(6), Right: unit.Dp(6)}.Layout(gtx, label.Layout)
 }
 
 func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, label string, disabled, primary bool) layout.Widget {

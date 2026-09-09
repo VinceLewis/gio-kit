@@ -183,7 +183,12 @@ func (w *Widget) layoutTableContent(gtx layout.Context, theme *material.Theme, s
 
 func (w *Widget) layoutCards(gtx layout.Context, theme *material.Theme, snapshot Snapshot, visible []Column) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutCardHeader(gtx, theme, snapshot, visible) }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if len(snapshot.Rows) == 0 {
+				return layout.Dimensions{}
+			}
+			return w.layoutCardHeader(gtx, theme, snapshot, visible)
+		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutClearSelection(gtx, theme, snapshot) }),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return w.layoutCardRows(gtx, theme, snapshot, visible)
@@ -254,7 +259,7 @@ func (w *Widget) layoutRows(gtx layout.Context, theme *material.Theme, snapshot 
 	if snapshot.State == Failed {
 		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(material.Body1(theme, "Fetch failed: "+snapshot.Err.Error()).Layout),
+				layout.Rigid(material.Body1(theme, failureMessage(snapshot)).Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if w.retry.Clicked(gtx) {
 						_ = w.Controller.Retry()
@@ -265,7 +270,7 @@ func (w *Widget) layoutRows(gtx layout.Context, theme *material.Theme, snapshot 
 		})
 	}
 	if snapshot.State == Empty {
-		return layout.Center.Layout(gtx, material.Body1(theme, "No rows match this query.").Layout)
+		return layout.Center.Layout(gtx, material.Body1(theme, emptyMessage(snapshot)).Layout)
 	}
 	if len(snapshot.Rows) == 0 && snapshot.State == Loading {
 		return layout.Center.Layout(gtx, material.Body1(theme, "Loading first page…").Layout)
@@ -289,6 +294,13 @@ func (w *Widget) layoutRows(gtx layout.Context, theme *material.Theme, snapshot 
 		}
 		return w.layoutRow(gtx, theme, snapshot.Rows[index], columns, snapshot.Selection[snapshot.Rows[index].ID], index)
 	})
+}
+
+func failureMessage(snapshot Snapshot) string {
+	if snapshot.Err == nil {
+		return "Could not load records."
+	}
+	return "Could not load records. " + snapshot.Err.Error()
 }
 
 func (w *Widget) layoutRowNested(gtx layout.Context, theme *material.Theme, row Row, columns []Column, selected bool, index int) layout.Dimensions {
