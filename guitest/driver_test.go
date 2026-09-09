@@ -18,6 +18,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	formkit "github.com/VinceLewis/gio-kit/form"
 	"github.com/VinceLewis/gio-kit/guitest"
 )
 
@@ -285,5 +286,26 @@ func TestFactoryFailureCleansPartialApplication(t *testing.T) {
 	})
 	if d != nil || !errors.Is(err, want) || !closed {
 		t.Fatalf("factory cleanup: driver=%v err=%v closed=%t", d, err, closed)
+	}
+}
+
+func TestFormEditorSharedLongPressArea(t *testing.T) {
+	f, err := formkit.New([]formkit.FieldSchema{{ID: "description", Label: "Description", Type: formkit.FieldText}}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(f.Close)
+	w := formkit.NewWidget(f)
+	th := theme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if err := d.Type(guitest.Role(semantic.Editor), "entered through Gio"); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Snapshot().Fields[0].Value; got != "entered through Gio" {
+		t.Fatalf("form value = %q", got)
 	}
 }

@@ -6,10 +6,11 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 - Started: 2026-09-09. User confirmed GPT-6 Astra / max and authorized commit,
   push, and execution of the plan.
-- Status: step 1 complete; defining the application contract and core driver.
-- Resume here: steps 2–3. Read this file, repository guidance, and the current
-  working tree before continuing. Step 1 does not need to be repeated unless
-  the Gio dependency changes.
+- Status: foundation and demo integration pass automated checks; preparing the
+  first release APK/device gate. See verification below for host limitations.
+- Resume here: finish APK verification, then wait for the user's device result.
+  After acceptance, continue the step-4 component semantics audit and remaining
+  step-5 actions. Do not repeat the completed feasibility proof.
 - Device gates remain mandatory. Stop after packaging material UI changes for
   the user to install, launch, and test; do not advance through a pending gate.
 
@@ -18,13 +19,13 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 | Step | Deliverable | Status |
 | --- | --- | --- |
 | 1 | Termux input.Router pointer/editor/semantics proof | Complete |
-| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | In progress |
+| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | Automated checks passed; APK gate next |
 | 3 | Deterministic core frame driver | Automated checks passed |
 | 4 | Reusable component semantics audit and improvements | Pending |
 | 5 | Selectors and interaction actions | In progress: tap/type/key/back/resize |
 | 6 | Versioned JSON dumps, JSON Schema, safe limits | Pending |
 | 7 | Component snapshot providers | Pending |
-| 8 | Tested human/LLM guide and adl-gio consumer pilot | Pending |
+| 8 | Tested human/LLM guide and adl-gio consumer pilot | Foundation guide added; complete reference/schema and pilot pending |
 | 9 | Separately built optional screenshots | Pending |
 | 10 | N*, G*, and form acceptance scenarios | Pending |
 | 11 | Evaluate manually launched device control bridge | Pending |
@@ -64,6 +65,31 @@ does not constitute device acceptance.
   descendants. Semantic hit-testing cannot prove an input sink or exact
   occlusion. The core ignores paint-only labels during targeting; stronger
   component diagnostics belong to the semantics/snapshot milestones.
+- The form also registers a coincident, pass-through long-press area as a
+  sibling of each editor. Targeting permits that unnamed area; a regression
+  test asserts that real input reaches the form controller. Exact input-sink
+  ownership is still not exposed by Gio public semantics.
+- Demo tests: `./tools/test-guitest-demo.sh -count=1 -v` passed, including
+  N1/N2/N3/N4/N6/N7 routed modal, editor, guarded Back, and resize; N5 fresh-root
+  reconstruction from persisted state; N8 delayed navigation and disposal;
+  database-startup cleanup; and coalesced persistence/error propagation.
+- Those tests exposed and fixed a stale dirty-flag bug when Back immediately
+  follows typing. The guard now reads the form controller's current state.
+- Demo lifecycle tests also passed ten consecutive runs after the cancellation
+  and guard fixes. This exercises scheduling variability but is not a race
+  detector result.
+- Application services now isolate the window, inject artificial delays,
+  apply external navigation on the frame goroutine, cancel/join startup and
+  external work, and write navigation state asynchronously with atomic replace.
+- Focused tests and vet passed for router, grid (including SQLite), form,
+  shell, presentation, dialog, picker, and guitest.
+- Normal `go test ./...` and `go vet ./...` fail at
+  `gioui.org@v0.10.2/internal/vk/vulkan_android.go:12:10`:
+  `fatal error: 'vulkan/vulkan.h' file not found` (followed by
+  `1 error generated.`). This is an incomplete host gate, not a pass.
+- `go test -race ./guitest` cannot run: `-race is not supported on android/arm64`.
+  Concurrent lifecycle tests remain required; they do not replace race testing
+  on a supported host or device acceptance here.
 
 ## Device acceptance
 
@@ -73,4 +99,6 @@ No new APK or device result yet.
 
 - 2026-09-09: execution authorized; progress ledger created before coding.
 - `b73fab4`: plan and initial progress ledger committed and pushed.
+- `2be5127`: standalone Termux proof committed and pushed.
+- `945d489`: deterministic core driver and lifecycle hooks committed and pushed.
 - 2026-09-09: Termux feasibility proof passed without window/GPU dependencies.

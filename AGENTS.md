@@ -51,6 +51,10 @@ The only authoritative functional test in this environment is the mobile test ap
 
 ## Coding and Test Standards
 
+For testing-framework implementation or use, read `docs/guitest.md` and
+`test-framework-progress.md`. Keep the ledger current at checkpoints and before
+pausing so another session can resume without repeating completed work.
+
 Use idiomatic Go and `gofmt`. Keep Gio layout functions small; retain widget and interaction state across frames and explicitly invalidate when external state changes require redraw. Never block the frame loop on data fetching. Make async completion safe against stale requests and disposed screens.
 
 Map automated tests to the requirement IDs (`N*`, `G*`, and form requirements). Add unit tests for routing, URL parsing, guards, serialization, sorting/filter construction, paging, selection, validation, dirty state, and policy evaluation. Add integration tests using deterministic fake data sources, including 10,000-row virtualization scenarios, delayed responses, cancellation, retry, and out-of-order completion. The mobile harness must expose each acceptance scenario without needing a real backend.

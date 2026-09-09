@@ -139,6 +139,13 @@ func (d *Driver) target(selector Selector, editorOnly bool) (f32.Point, error) {
 			if hit.Desc.Class == semantic.Unknown && hit.Desc.Gestures == 0 {
 				return position, nil
 			}
+			// Composed controls can register a sibling pass-through gesture
+			// area, for example the form editor's long-press handler. Gio's
+			// semantics do not expose PassOp. Permit the coincident unnamed
+			// area, then let real event routing decide which widgets respond.
+			if hit.Desc.Class == semantic.Unknown && hit.Parent == n.Parent && hit.Desc.Bounds == n.Desc.Bounds && hit.Desc.Label == "" && hit.Desc.Description == "" {
+				return position, nil
+			}
 			for index := hit.Index; index >= 0; index = d.nodes[index].Parent {
 				if index == n.Index {
 					return position, nil

@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gioui.org/app"
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
@@ -29,20 +28,20 @@ type gridSetup struct {
 	db         *sql.DB
 	controller *grid.Controller
 	err        error
+	flaky      *flakySource
 }
 
 type flakySource struct {
 	source   grid.DataSource
 	failNext atomic.Bool
 	delay    time.Duration
+	sleep    func(context.Context, time.Duration) error
 }
 
 func (s *flakySource) Fetch(ctx context.Context, offset, limit int, sort []grid.SortSpec, filters map[string]grid.Filter) ([]grid.Row, int, error) {
 	if s.delay > 0 {
-		select {
-		case <-time.After(s.delay):
-		case <-ctx.Done():
-			return nil, 0, ctx.Err()
+		if err := s.sleep(ctx, s.delay); err != nil {
+			return nil, 0, err
 		}
 	}
 	if s.failNext.CompareAndSwap(true, false) {
@@ -52,6 +51,8 @@ func (s *flakySource) Fetch(ctx context.Context, offset, limit int, sort []grid.
 }
 
 type gridDemo struct {
+	cancel      context.CancelFunc
+	done        chan struct{}
 	ready       chan gridSetup
 	db          *sql.DB
 	controller  *grid.Controller
@@ -69,19 +70,23 @@ type gridDemo struct {
 	additive    bool
 }
 
-func newGridDemo(window *app.Window, dataDir string) *gridDemo {
-	demo := &gridDemo{ready: make(chan gridSetup, 1)}
+func newGridDemo(env demoEnvironment) *gridDemo {
+	ctx, cancel := context.WithCancel(env.Context)
+	demo := &gridDemo{ready: make(chan gridSetup, 1), cancel: cancel, done: make(chan struct{})}
 	demo.filter.SingleLine = true
 	go func() {
-		db, err := sql.Open("sqlite3", filepath.Join(dataDir, "gio-kit-demo.db")+"?_busy_timeout=5000&_foreign_keys=on")
+		defer close(demo.done)
+		db, err := sql.Open("sqlite3", filepath.Join(env.DataDir, "gio-kit-demo.db")+"?_busy_timeout=5000&_foreign_keys=on")
 		if err == nil {
 			db.SetMaxOpenConns(1)
-			_, err = db.Exec(incidentSQL)
-			if err != nil {
+			_, err = db.ExecContext(ctx, incidentSQL)
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			} else if err != nil {
 				if migrationErr := migrateIncidentTable(db); migrationErr != nil {
 					err = errors.Join(err, migrationErr)
 				} else {
-					_, err = db.Exec(incidentSQL)
+					_, err = db.ExecContext(ctx, incidentSQL)
 				}
 			} else {
 				err = migrateIncidentTable(db)
@@ -92,7 +97,7 @@ func newGridDemo(window *app.Window, dataDir string) *gridDemo {
 				_ = db.Close()
 			}
 			demo.ready <- gridSetup{err: err}
-			window.Invalidate()
+			env.Invalidate()
 			return
 		}
 		source, err := gridsqlite.New(db, gridsqlite.Config{
@@ -103,22 +108,21 @@ func newGridDemo(window *app.Window, dataDir string) *gridDemo {
 		if err != nil {
 			_ = db.Close()
 			demo.ready <- gridSetup{err: err}
-			window.Invalidate()
+			env.Invalidate()
 			return
 		}
-		flaky := &flakySource{source: source, delay: 350 * time.Millisecond}
+		flaky := &flakySource{source: source, delay: 350 * time.Millisecond, sleep: env.Sleep}
 		controller, err := grid.NewController([]grid.Column{
 			{ID: "number", Header: "Number", Width: 112, Sortable: true, Visible: true, Filter: grid.FilterText},
 			{ID: "description", Header: "Description", Flex: 2, Sortable: true, Visible: true, Filter: grid.FilterText},
 			{ID: "priority", Header: "Priority", Width: 88, Align: grid.AlignStart, Sortable: true, Visible: true, Filter: grid.FilterChoice},
 			{ID: "state", Header: "State", Flex: 1, Sortable: true, Visible: true, Filter: grid.FilterChoice},
-		}, flaky, 50, window.Invalidate)
+		}, flaky, 50, env.Invalidate)
 		if err == nil {
 			err = controller.Refresh()
 		}
-		demo.flaky = flaky
-		demo.ready <- gridSetup{db: db, controller: controller, err: err}
-		window.Invalidate()
+		demo.ready <- gridSetup{db: db, controller: controller, err: err, flaky: flaky}
+		env.Invalidate()
 	}()
 	return demo
 }
@@ -130,6 +134,7 @@ func (d *gridDemo) poll(ui *demoUI) {
 	select {
 	case result := <-d.ready:
 		d.db, d.controller, d.setupErr = result.db, result.controller, result.err
+		d.flaky = result.flaky
 		if d.controller != nil {
 			d.widget = grid.NewWidget(d.controller)
 			d.widget.OpenColumn = "number"
@@ -298,6 +303,14 @@ func (d *gridDemo) viewButton(ui *demoUI, click *widget.Clickable, label string,
 }
 
 func (d *gridDemo) Close() {
+	d.cancel()
+	<-d.done
+	// Startup may have finished without the UI ever consuming its result.
+	select {
+	case result := <-d.ready:
+		d.db, d.controller = result.db, result.controller
+	default:
+	}
 	if d.controller != nil {
 		d.controller.Close()
 	}

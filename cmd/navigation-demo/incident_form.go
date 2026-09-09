@@ -114,7 +114,7 @@ func (u *demoUI) dataFormScreen(gtx layout.Context, route router.Route) layout.D
 
 func (u *demoUI) newIncidentForm(route router.Route) (*incidentFormDemo, error) {
 	id := route.Params["id"].String()
-	controller, err := formkit.New(incidentSchema(), incidentRules(), u.window.Invalidate)
+	controller, err := formkit.New(incidentSchema(), incidentRules(), u.env.Invalidate)
 	if err != nil {
 		return nil, err
 	}
@@ -166,17 +166,26 @@ func (u *demoUI) newIncidentForm(route router.Route) (*incidentFormDemo, error) 
 	demo.widget.OnAttachment = func(field formkit.FieldSchema) {
 		_ = demo.form.SetValue(field.ID, "example-document.pdf")
 		u.status, u.statusOK = "Attachment picker callback invoked.", true
-		u.window.Invalidate()
+		u.env.Invalidate()
 	}
 	demo.widget.OnInvalid = func() {
 		u.status, u.statusOK = "Fix errors before saving.", false
-		u.window.Invalidate()
+		u.env.Invalidate()
 	}
 	controller.SetSubmitter(func(ctx context.Context, values map[string]string) error {
-		select {
-		case <-time.After(600 * time.Millisecond):
-		case <-ctx.Done():
-			return ctx.Err()
+		if !u.work.begin() {
+			return context.Canceled
+		}
+		defer u.work.end()
+		ctx, cancel := context.WithCancel(ctx)
+		stop := context.AfterFunc(u.env.Context, cancel)
+		defer stop()
+		defer cancel()
+		if err := u.env.Sleep(ctx, 600*time.Millisecond); err != nil {
+			return err
+		}
+		if err := u.env.Context.Err(); err != nil {
+			return err
 		}
 		if strings.EqualFold(strings.TrimSpace(values["short_description"]), "server-error") {
 			return formkit.FieldErrors{"short_description": "SQLite service rejected this test value"}
@@ -197,7 +206,7 @@ func (u *demoUI) newIncidentForm(route router.Route) (*incidentFormDemo, error) 
 		case demo.saved <- struct{}{}:
 		default:
 		}
-		u.window.Invalidate()
+		u.env.Invalidate()
 	})
 	controller.OnCancel(u.navigateBack)
 	return demo, nil
@@ -218,7 +227,7 @@ func (u *demoUI) openLookup(target *incidentFormDemo, field string) {
 	controller, err := grid.NewController([]grid.Column{
 		{ID: "number", Header: "Number", Width: 105, Sortable: true, Visible: true, Filter: grid.FilterText},
 		{ID: "description", Header: "Description", Flex: 2, Visible: true, Filter: grid.FilterText},
-	}, source, 30, u.window.Invalidate)
+	}, source, 30, u.env.Invalidate)
 	if err != nil {
 		u.fail(err)
 		return
@@ -329,14 +338,21 @@ func (u *demoUI) cleanupForm(route router.Route) {
 	u.dirty = false
 }
 
-func (u *demoUI) Close() {
+func (u *demoUI) Close() error {
+	if u.closed {
+		return nil
+	}
+	u.closed = true
+	u.cancel()
 	if u.lookup != nil {
 		u.lookup.Close()
 	}
 	for _, demo := range u.formDemos {
 		demo.form.Close()
 	}
+	u.work.stop()
 	if u.gridDemo != nil {
 		u.gridDemo.Close()
 	}
+	return u.persistence.close()
 }

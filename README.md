@@ -24,6 +24,11 @@ import (
 
 The current Gio baseline is `gioui.org v0.10.2`.
 
+The window-free testing framework is being implemented for local Termux use.
+See the [developer/LLM guide](docs/guitest.md) and
+[delivery progress](test-framework-progress.md) for available APIs and pending
+device gates.
+
 ## Data grid
 
 The grid controller requests asynchronous pages from a `DataSource`; it never

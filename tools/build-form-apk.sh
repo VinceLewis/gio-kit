@@ -40,7 +40,7 @@ CGO_CPPFLAGS="-I$ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include" 
 CGO_CFLAGS="-Wno-error=declaration-after-statement" \
 CGO_LDFLAGS="-L$ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24" \
 "$gogio_bin" -target android -arch arm64 -appid app.giokit.cruddemo \
-	-name "Gio Kit CRUD Lab" -version 0.3.1.8 -minsdk 24 -targetsdk 35 \
+	-name "Gio Kit CRUD Lab" -version 0.3.1.9 -minsdk 24 -targetsdk 35 \
 	-schemes gio-kit -signkey "$HOME/.android/debug.keystore" -signpass android \
 	-o "$out" ./cmd/navigation-demo
 
