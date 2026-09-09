@@ -43,7 +43,6 @@ type Widget struct {
 	delete          widget.Clickable
 	list            widget.List
 	pendingClose    bool
-	wasSubmitting   bool
 }
 
 func NewWidget(form *Form) *Widget {
@@ -63,13 +62,7 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 		return material.Body1(theme, "Form is not configured").Layout(gtx)
 	}
 	snapshot := w.Form.Snapshot()
-	if w.wasSubmitting && !snapshot.Submitting && snapshot.SubmitError == nil && !snapshot.Dirty && w.pendingClose {
-		w.pendingClose = false
-		if w.OnSaveAndClose != nil {
-			w.OnSaveAndClose()
-		}
-	}
-	w.wasSubmitting = snapshot.Submitting
+	w.completePendingClose(snapshot)
 	visible := make([]FieldState, 0, len(snapshot.Fields))
 	for _, field := range snapshot.Fields {
 		if field.Visible {
@@ -100,6 +93,15 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 			return w.actions(gtx, theme, snapshot)
 		}),
 	)
+}
+
+func (w *Widget) completePendingClose(snapshot Snapshot) {
+	if !snapshot.Submitting && snapshot.SubmitError == nil && !snapshot.Dirty && w.pendingClose {
+		w.pendingClose = false
+		if w.OnSaveAndClose != nil {
+			w.OnSaveAndClose()
+		}
+	}
 }
 
 func (w *Widget) layoutField(gtx layout.Context, theme *material.Theme, field FieldState, index int) layout.Dimensions {
