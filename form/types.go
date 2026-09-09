@@ -32,15 +32,16 @@ type Reference struct {
 type Validator func(value string) (ok bool, message string)
 
 type FieldSchema struct {
-	ID           string
-	Label        string
-	Type         FieldType
-	Mandatory    bool
-	ReadOnly     bool
-	DefaultValue string
-	Choices      []Choice
-	RefTable     string
-	Validators   []Validator
+	ID                string
+	Label             string
+	Type              FieldType
+	Mandatory         bool
+	ReadOnly          bool
+	DefaultValue      string
+	Choices           []Choice
+	RefTable          string
+	Validators        []Validator
+	UnavailableReason string
 }
 
 type Condition struct {
@@ -69,6 +70,7 @@ type UIRule struct {
 type FieldState struct {
 	Schema    FieldSchema
 	Value     string
+	Loaded    string
 	Reference Reference
 	Visible   bool
 	Mandatory bool

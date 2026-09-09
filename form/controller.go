@@ -260,7 +260,7 @@ func (f *Form) Snapshot() Snapshot {
 		dirty := item.value != item.loaded
 		result.Dirty = result.Dirty || dirty
 		result.Fields = append(result.Fields, FieldState{
-			Schema: item.schema, Value: item.value, Reference: item.reference,
+			Schema: item.schema, Value: item.value, Loaded: item.loaded, Reference: item.reference,
 			Visible: visible, Mandatory: mandatory, ReadOnly: readOnly,
 			Dirty: dirty, Touched: item.touched, Error: err,
 		})

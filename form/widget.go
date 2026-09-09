@@ -22,6 +22,8 @@ type Widget struct {
 	OnReference     func(FieldSchema)
 	OnAttachment    func(FieldSchema)
 	OnSaveAndClose  func()
+	OnDelete        func()
+	DeleteLabel     string
 	OnInvalid       func()
 	Editors         map[string]*widget.Editor
 	buttons         map[string]*widget.Clickable
@@ -38,6 +40,7 @@ type Widget struct {
 	save            widget.Clickable
 	saveClose       widget.Clickable
 	cancel          widget.Clickable
+	delete          widget.Clickable
 	list            widget.List
 	pendingClose    bool
 	wasSubmitting   bool
@@ -127,6 +130,12 @@ func (w *Widget) layoutField(gtx layout.Context, theme *material.Theme, field Fi
 				errLabel := material.Caption(theme, field.Error)
 				errLabel.Color = color.NRGBA{R: 183, G: 48, B: 62, A: 255}
 				return layout.Inset{Top: unit.Dp(3)}.Layout(gtx, errLabel.Layout)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if field.Schema.UnavailableReason == "" || field.Schema.Type == FieldAttachment && w.OnAttachment != nil {
+					return layout.Dimensions{}
+				}
+				return layout.Inset{Top: unit.Dp(3)}.Layout(gtx, material.Caption(theme, field.Schema.UnavailableReason).Layout)
 			}),
 		)
 	})
@@ -374,6 +383,9 @@ func (w *Widget) handleTextPress(gtx layout.Context, fieldID string, editor *wid
 }
 
 func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	if w.delete.Clicked(gtx) && !snapshot.Submitting && w.OnDelete != nil {
+		w.OnDelete()
+	}
 	if w.cancel.Clicked(gtx) {
 		w.Form.Cancel()
 	}
@@ -393,7 +405,7 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			w.OnInvalid()
 		}
 	}
-	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+	children := []layout.FlexChild{
 		layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, "CANCEL", snapshot.Submitting, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
@@ -412,7 +424,17 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			label.Alignment = text.Middle
 			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, label.Layout)
 		}),
-	)
+	}
+	if w.OnDelete != nil {
+		label := w.DeleteLabel
+		if label == "" {
+			label = "DELETE"
+		}
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, material.Button(theme, &w.delete, label).Layout)
+		}))
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
 func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, label string, disabled, primary bool) layout.Widget {
