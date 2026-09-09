@@ -68,21 +68,23 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme, content layou
 		return layout.Dimensions{}
 	}
 	w.handleClicks(gtx)
-	if w.ResolvedMode(gtx) == ModeWide {
-		w.drawerOpen = false
-		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Min.X, gtx.Constraints.Max.X = gtx.Dp(unit.Dp(240)), gtx.Dp(unit.Dp(240))
-				return w.drawer(gtx, theme, false)
-			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return w.main(gtx, theme, false, content) }),
-		)
-	}
-	return w.main(gtx, theme, true, func(gtx layout.Context) layout.Dimensions {
-		if w.drawerOpen {
-			return w.drawer(gtx, theme, true)
+	return surface(gtx, theme.Palette.Bg, func(gtx layout.Context) layout.Dimensions {
+		if w.ResolvedMode(gtx) == ModeWide {
+			w.drawerOpen = false
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					gtx.Constraints.Min.X, gtx.Constraints.Max.X = gtx.Dp(unit.Dp(240)), gtx.Dp(unit.Dp(240))
+					return w.drawer(gtx, theme, false)
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return w.main(gtx, theme, false, content) }),
+			)
 		}
-		return content(gtx)
+		return w.main(gtx, theme, true, func(gtx layout.Context) layout.Dimensions {
+			if w.drawerOpen {
+				return w.drawer(gtx, theme, true)
+			}
+			return content(gtx)
+		})
 	})
 }
 
