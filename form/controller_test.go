@@ -117,6 +117,13 @@ func TestF8SubmitLifecycleAndF10ServerErrors(t *testing.T) {
 	}
 }
 
+func TestFieldErrorsExplainFieldsDeterministically(t *testing.T) {
+	err := FieldErrors{"zeta": "", "alpha": "Already exists"}
+	if got, want := err.Error(), "alpha: Already exists; zeta: Invalid value"; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+}
+
 func TestF9SecondRecordUsesOnlySchema(t *testing.T) {
 	f, err := New([]FieldSchema{{ID: "risk", Type: FieldNumber}}, nil, nil)
 	if err != nil || len(f.Snapshot().Fields) != 1 {
