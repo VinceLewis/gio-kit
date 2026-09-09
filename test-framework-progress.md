@@ -19,9 +19,9 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 | --- | --- | --- |
 | 1 | Termux input.Router pointer/editor/semantics proof | Complete |
 | 2 | Layout, invalidation, time, idle, cleanup contract; demo root | In progress |
-| 3 | Deterministic core frame driver | In progress |
+| 3 | Deterministic core frame driver | Automated checks passed |
 | 4 | Reusable component semantics audit and improvements | Pending |
-| 5 | Selectors and interaction actions | Pending |
+| 5 | Selectors and interaction actions | In progress: tap/type/key/back/resize |
 | 6 | Versioned JSON dumps, JSON Schema, safe limits | Pending |
 | 7 | Component snapshot providers | Pending |
 | 8 | Tested human/LLM guide and adl-gio consumer pilot | Pending |
@@ -51,6 +51,19 @@ does not constitute device acceptance.
   selected/disabled state, and click/scroll gestures. They do not expose a
   complete clip stack or a semantic-to-focus-tag mapping. Do not invent those
   facts or access Gio internals; use explicit component cooperation later.
+- Core driver: `./tools/test-guitest.sh -count=1 -v` and its `CGO_ENABLED=0`
+  variant passed. Coverage includes selectors/ambiguity, real pointer/editor/
+  back input, disabled/offscreen targets, resize, virtual timers, queued
+  completion/idle, cancellation, cleanup on factory failure, frame limits,
+  and future-only redraws.
+- Actions consume input frames without waiting for all external work; call
+  `WaitFor` to observe loading or `Settle` for application idle. Both waits have
+  a five-second safety cap and honor earlier context deadlines. Long press,
+  drag/scroll, scoped selectors, stable IDs, and dumps remain pending.
+- Stock material editor hints are sibling semantics over their editor, not
+  descendants. Semantic hit-testing cannot prove an input sink or exact
+  occlusion. The core ignores paint-only labels during targeting; stronger
+  component diagnostics belong to the semantics/snapshot milestones.
 
 ## Device acceptance
 

@@ -110,6 +110,12 @@ Supported actions should include:
 
 Tests should not depend on arbitrary sleeps. The framework should offer `Advance`, `WaitFor`, and an application-provided asynchronous-idle hook. Timeouts remain necessary to prevent deadlocks.
 
+Actions must allow inspection of intermediate loading/error states: process
+their input frames, then let callers explicitly choose `WaitFor` or `Settle`.
+Settling may advance immediately due animation frames by a fixed interval, but
+must not fast-forward endlessly through future-only redraws such as caret
+blinking. Application delays use the injected clock and explicit advancement.
+
 ## Selectors and Semantics
 
 Selectors should primarily use the accessibility semantics already emitted by Gio:
@@ -197,7 +203,12 @@ The schema should include, where applicable:
 - `covered`: known to be behind a modal or overlay.
 - `virtualized`: the logical item exists but was not laid out in this frame.
 
-The dump must not claim exact occlusion where it cannot be proven. Gio semantics can reliably describe bounds and clipping, but arbitrary paint order and translucent overlays can make pixel-level visibility ambiguous.
+The dump must not claim exact occlusion where it cannot be proven. Gio v0.10.2
+public semantics expose bounds but not the full clip stack or an exact mapping
+to input handlers. Labels can also be sibling semantics over a control (for
+example, a material editor hint). Report clipping/coverage as unknown unless a
+component provider or a supported public API establishes it. Arbitrary paint
+order and translucent overlays make pixel-level visibility ambiguous.
 
 ### Virtualized content
 
