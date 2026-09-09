@@ -86,6 +86,14 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if snapshot.SubmitError == nil {
+				return layout.Dimensions{}
+			}
+			label := material.Caption(theme, snapshot.SubmitError.Error())
+			label.Color = color.NRGBA{R: 183, G: 48, B: 62, A: 255}
+			return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, label.Layout)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return w.actions(gtx, theme, snapshot)
 		}),
 	)
@@ -204,18 +212,26 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 		})
 	case FieldAttachment:
 		button := w.button(field.Schema.ID)
-		if button.Clicked(gtx) && !field.ReadOnly && w.OnAttachment != nil {
+		selectable := !field.ReadOnly && w.OnAttachment != nil
+		if button.Clicked(gtx) && selectable {
 			w.OnAttachment(field.Schema)
+		}
+		if !selectable {
+			gtx = gtx.Disabled()
 		}
 		name := field.Value
 		if name == "" {
 			name = "No attachment selected"
 		}
+		action := "CHOOSE"
+		if w.OnAttachment == nil {
+			action = "UNAVAILABLE"
+		}
 		return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
 			return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 					layout.Flexed(1, material.Body1(theme, name).Layout),
-					layout.Rigid(material.Caption(theme, "CHOOSE").Layout),
+					layout.Rigid(material.Caption(theme, action).Layout),
 				)
 			})
 		})
