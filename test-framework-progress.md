@@ -8,6 +8,8 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
   push, and execution of the plan.
 - Status: **awaiting user device acceptance** of the foundation APK. Build,
   signing, signature, native dependency, and Downloads-copy checks passed.
+- Termux follow-up: full default-package tests and vet now pass through
+  `./tools/test-termux.sh -count=1`. This does not advance the device gate.
 - Resume here: obtain the user's result for the checklist below. After
   acceptance, continue the step-4 component semantics audit and remaining step-5
   actions, including replacing the demo test's positional field selector with
@@ -84,10 +86,22 @@ does not constitute device acceptance.
   external work, and write navigation state asynchronously with atomic replace.
 - Focused tests and vet passed for router, grid (including SQLite), form,
   shell, presentation, dialog, picker, and guitest.
-- Normal `go test ./...` and `go vet ./...` fail at
+- Unconfigured `go test ./...` and `go vet ./...` failed at
   `gioui.org@v0.10.2/internal/vk/vulkan_android.go:12:10`:
   `fatal error: 'vulkan/vulkan.h' file not found` (followed by
-  `1 error generated.`). This is an incomplete host gate, not a pass.
+  `1 error generated.`). The headers already exist in the pinned NDK; the
+  default compiler search path omitted them.
+- 2026-09-09: `./tools/test-termux.sh -count=1` passed full default-package
+  tests and vet, including when invoked from outside the repository. It uses
+  the APK build's NDK include/API-24 library paths and C-warning workaround,
+  plus `-llog` for standalone CGO test executables. The wrapper validates
+  Android/arm64, CGO, headers, and libraries; its CGO-disabled rejection was
+  checked. No global Go settings, packages, or pinned toolchain versions changed.
+  Some NDK/compiler warnings remain on compilation. This resolves the header
+  compilation blocker, not GPU/headless runtime support or device acceptance.
+- After adding the wrapper, `CGO_ENABLED=0 ./tools/test-guitest.sh -count=1`
+  and `./tools/test-guitest-demo.sh -count=1` both passed, including their
+  dependency-isolation checks and vet. The default suite does not replace them.
 - `go test -race ./guitest` cannot run: `-race is not supported on android/arm64`.
   Concurrent lifecycle tests remain required; they do not replace race testing
   on a supported host or device acceptance here.
@@ -134,3 +148,5 @@ Record the user's results here before advancing the implementation.
 - `17e41f2`: demo integration, current guide, regression tests, and APK version
   checkpoint committed and pushed. Release APK verified and copied to Downloads.
 - 2026-09-09: Termux feasibility proof passed without window/GPU dependencies.
+- 2026-09-09: verified full-suite Termux wrapper added and header-blocker notes
+  corrected; framework implementation remains paused for user device acceptance.

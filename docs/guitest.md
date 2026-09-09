@@ -22,10 +22,24 @@ window/event-loop entry point. It needs the existing SQLite CGO toolchain.
 Neither command needs a desktop display, GPU, SDK, emulator, ADB, or a server.
 
 Do not interpret the `guitest` build tag as an Android packaging option. The
-release build must include the actual window entry point. The normal host
-`go test ./...` and `go vet ./...` currently fail on missing Vulkan headers;
-the separate core/demo commands do not certify Android behavior. Go's race
-detector is unsupported on this Android/arm64 host.
+release build must include the actual window entry point.
+
+For full default-package tests and vet, including compilation of the window
+entry point, use:
+
+```sh
+./tools/test-termux.sh -count=1
+```
+
+This command needs the pinned NDK and CGO. It adds the existing Vulkan/EGL
+header and API-24 library paths, the APK build's C-warning workaround, and
+`-llog` for standalone CGO test executables. Its CGO settings replace inherited
+flags only inside the script; it does not install packages or write global Go
+configuration. Unconfigured `go test ./...` can still fail to locate headers.
+Some NDK/compiler warnings remain. This command does not select the `guitest`
+tag or replace either dependency-isolation check above. Successful tests do
+not establish GPU/headless rendering support or certify Android behavior.
+Go's race detector remains unsupported on this Android/arm64 host.
 
 ## Integrate an application
 

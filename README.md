@@ -190,12 +190,18 @@ err = nav.Push(router.Route{
 
 ## Test
 
+Full default-package tests and vet on this Termux phone:
+
 ```sh
-go test ./router ./grid ./grid/sqlite ./form
+./tools/test-termux.sh -count=1
 ```
 
-Full host Gio compilation can fail in Termux when Vulkan headers are
-unavailable. The platform-independent packages above remain testable.
+The script uses the existing pinned NDK's Vulkan/EGL headers and Android
+libraries with command-local compiler settings; no global configuration or
+toolchain upgrade is needed. Some NDK/compiler warnings remain. Focused checks
+such as `go test ./router ./grid ./grid/sqlite ./form` still work independently.
+Run the separate [framework checks](docs/guitest.md#run-on-this-phone) for
+GPU-isolation checks and the tagged demo tests. None replaces manual APK testing.
 
 ## Android demo
 

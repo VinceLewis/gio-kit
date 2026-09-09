@@ -237,12 +237,13 @@ Where supported, the framework can render the same operation list with `gpu/head
 
 Screenshots should remain diagnostic rather than the primary correctness assertion. Font rasterization, GPU behavior, platform differences, and animation timing can make pixel tests brittle.
 
-The current Termux host may not provide a compatible `gpu/headless` backend, and host Gio compilation can require unavailable Vulkan or desktop graphics headers. Screenshot support must therefore be optional and degrade gracefully; failure to initialize a headless renderer must not prevent semantic interaction tests.
+The current Termux host may not provide a compatible `gpu/headless` backend. The pinned NDK already supplies Vulkan/EGL headers; `tools/test-termux.sh` resolves the default compiler search-path blocker for full default-package tests and vet without changing toolchain versions. That compilation result does not establish headless rendering support. Screenshot support must therefore be optional and degrade gracefully; failure to initialize a headless renderer must not prevent semantic interaction tests.
 
 Graphics-dependent screenshot support must be isolated in a separate package
 or behind explicit build tags. Runtime fallback alone is insufficient: merely
 importing a GPU or window package can make `go test` fail to compile in Termux.
-The default core test command must not select that dependency graph.
+The default core test command must not select that dependency graph or require
+the NDK environment supplied by the full-suite wrapper.
 
 ## Termux and Consumer Integration
 
