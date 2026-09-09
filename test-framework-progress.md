@@ -6,9 +6,10 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 - Started: 2026-09-09. User confirmed GPT-6 Astra / max and authorized commit,
   push, and execution of the plan.
-- Status: preparing the plan checkpoint, then the Termux input/semantics proof.
-- Resume here: complete step 1 before settling the public API. Read this file,
-  repository guidance, and the current working tree before continuing.
+- Status: step 1 complete; defining the application contract and core driver.
+- Resume here: steps 2–3. Read this file, repository guidance, and the current
+  working tree before continuing. Step 1 does not need to be repeated unless
+  the Gio dependency changes.
 - Device gates remain mandatory. Stop after packaging material UI changes for
   the user to install, launch, and test; do not advance through a pending gate.
 
@@ -16,9 +17,9 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 | Step | Deliverable | Status |
 | --- | --- | --- |
-| 1 | Termux input.Router pointer/editor/semantics proof | Pending |
-| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | Pending |
-| 3 | Deterministic core frame driver | Pending |
+| 1 | Termux input.Router pointer/editor/semantics proof | Complete |
+| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | In progress |
+| 3 | Deterministic core frame driver | In progress |
 | 4 | Reusable component semantics audit and improvements | Pending |
 | 5 | Selectors and interaction actions | Pending |
 | 6 | Versioned JSON dumps, JSON Schema, safe limits | Pending |
@@ -43,6 +44,13 @@ does not constitute device acceptance.
   part of this plan.
 - Core testing must exclude window/GPU dependencies at compile time. Graphics
   and Android behavior have separate, explicitly reported verification gates.
+- Step 1: `./tools/test-guitest.sh -count=1 -v` passed on Android/arm64 under
+  Termux. It checks the test dependency graph, drives a real material button
+  and Unicode editor through `input.Router`, reads semantics, and runs vet.
+- Gio v0.10.2 public semantics expose class, label, description, bounds,
+  selected/disabled state, and click/scroll gestures. They do not expose a
+  complete clip stack or a semantic-to-focus-tag mapping. Do not invent those
+  facts or access Gio internals; use explicit component cooperation later.
 
 ## Device acceptance
 
@@ -51,3 +59,5 @@ No new APK or device result yet.
 ## Checkpoint history
 
 - 2026-09-09: execution authorized; progress ledger created before coding.
+- `b73fab4`: plan and initial progress ledger committed and pushed.
+- 2026-09-09: Termux feasibility proof passed without window/GPU dependencies.
