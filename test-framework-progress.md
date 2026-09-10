@@ -74,11 +74,23 @@ does not constitute device acceptance.
   and removes partial images. Core tests/vet and the real tagged GPU probe pass
   after this final helper fix.
 - ADB paired and connected successfully using the user-provided screenshots;
-  both APK installations succeeded. Launch and visual acceptance remain pending.
+  both APK installations succeeded. The user confirmed both manual launches.
+  Both processes were running; their error-level logs showed only Android's
+  ashmem deprecation warning. Workflow acceptance remains pending.
   Pairing codes/screenshots are outside the repositories and are not committed.
 - Bridge evaluation completed in [the decision note](docs/guitest-bridge.md).
   Implementation is deferred until a manual debug transport/security spike;
   release builds contain no control bridge.
+- Consumer integration is committed as `adl-gio@c5d29eb`, pinning published
+  `gio-kit@v0.0.0-20260910002538-1a65d354f88e`. Full consumer verification,
+  tagged root tests/vet, module verification and the signed Android build pass
+  with `GOWORK=off`. No local workspace or replacement is required.
+- That final-pin ADL build has SHA-256
+  `7a6224f2d375db7850ae6bc4f262f31a358099a85e83081644734aff75fd8072`;
+  the verification copy is `/data/data/com.termux/files/usr/tmp/adl-framework-final-pin.apk`.
+  The installed/Downloads APK below remains the device-test checkpoint. Its
+  production dependency graph excludes the only subsequent library code change,
+  the optional screenshot helper. No further installation interrupted testing.
 
 ## Foundation verification and decisions (historical)
 
@@ -163,8 +175,9 @@ does not constitute device acceptance.
 - APK framework source: `f9ddc8da792e`, published before the ADL dependency pin
   `v0.0.0-20260910000804-f9ddc8da792e`. The subsequent screenshot artifact helper
   fix does not enter either application's production dependency graph.
-- Both APKs installed successfully through user-authorized ADB. Manual launch
-  and visual acceptance are pending; installation does not pass this gate.
+- Both APKs installed successfully through user-authorized ADB; installed
+  package versions were checked. The user confirmed launching both apps.
+  Workflow acceptance remains pending; installation/launch do not pass this gate.
 
 Launch both installed APKs, then check:
 
