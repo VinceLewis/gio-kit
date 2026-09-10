@@ -2,8 +2,56 @@
 
 ## Status
 
-**Status:** Proposed for user review. Writing this plan does not yet amend either
-repository's ADB authority or authorize device input.
+**Status:** Stopped negative at T3-8 on 2026-09-10. The authorized fallback
+study found no public Gio v0.10.2 API that can prove transform- and clip-correct
+absolute display bounds. No exporter or device-control transport was created.
+
+## Execution Result
+
+On the explicit connected serial `localhost:42211`, the user manually
+foregrounded `app.giokit.cruddemo`. Foreground activity, focus, and window
+inspection all identified that package on display 0. The physical display was
+1080×2388 at 400 dpi. Two bounded UI Automator captures were byte-identical
+(2,262 bytes; SHA-256
+`c9a250216ebbac002db317d6f33c53a470b0257d148ed72fa4142b71126dbc42`).
+
+Both captures contained only six enabled Android wrapper/surface nodes: three
+`FrameLayout`, one `LinearLayout`, one `SurfaceView`, and one generic `View`.
+They contained no text, content descriptions, clickable nodes, scroll targets,
+selected state, editors, buttons, or other Gio virtual controls. Bounds were
+non-empty and within the display, and package ownership and repeatability were
+sound, but there was no semantic target to resolve. Temporary raw captures were
+deleted and no device input was sent.
+
+This meets the explicit T3-1 stop-negative condition that UI Automator exposes
+only the host view and omits actionable Gio nodes. Tasks T3-2 through T3-7 were
+not started. The negative private-router bridge decision remains unchanged.
+App-side geometry fallback T3-8 was subsequently authorized for its bounded
+feasibility decision; its result is recorded below.
+
+### T3-8 fallback result
+
+Public application code receives `layout.Context`, the submitted operation
+list, and an `input.Source`, but no current absolute origin, transform, effective
+clip, live-router semantic tree, or frame generation. The Android backend can
+query the live semantic tree and adds `GioView.getLocationOnScreen` before
+publishing bounds, but those callbacks and the window-owned router are
+unexported.
+
+Replaying the submitted operations through a second public `input.Router` can
+produce same-frame window-local semantic bounds and an application can attach
+its own generation. That partial approach cannot prove the required result:
+semantic bounds do not expose effective ancestor clipping, arbitrary affine
+rotation/shear is not reduced to a generally correct enclosing rectangle, and
+the application is not given the native view's absolute display origin.
+Combining those bounds with UI Automator's host-surface origin would be an
+inference, while the virtual-node comparison required by this task is
+impossible because T3-1 exposed no Gio nodes.
+
+This meets T3-8's explicit stop-negative condition. No source spike, build tag,
+file/log transport, APK, or device input was created. A future proposal would
+have to relax the authoritative-bounds requirement or permit a maintained Gio
+platform patch/private adapter; neither is authorized here.
 
 **Repositories:**
 
@@ -20,7 +68,7 @@ This supplements Gates C and D. It does not turn ADB-driven checks into proof of
 visual quality, normal IME behavior, TalkBack behavior, physical touch feel, or
 OS process recreation.
 
-## Proposed Decision
+## Approved Decision
 
 1. Use Android's accessibility/UI Automator tree as the primary source of live
    screen-space bounds. Gio v0.10.2 already exposes its live semantic tree to
@@ -249,17 +297,18 @@ validated before every use.
 
 ### T3-0 — Approval and baselines
 
-- [ ] Review, amend, approve, or reject this plan.
-- [ ] If approved, amend both `AGENTS.md` files with the scoped input exception.
-- [ ] Record the approved authority and current commits in both progress ledgers.
-- [ ] Confirm `adb`, `uiautomator`, one explicit serial, installed package
+- [x] Review, amend, approve, or reject this plan.
+- [x] If approved, amend both `AGENTS.md` files with the scoped input exception.
+- [x] Record the approved authority and current commits in both progress ledgers.
+- [x] Confirm `adb`, `uiautomator`, one explicit serial, installed package
       identities, and manual-launch ownership without changing device state.
-- [ ] Preserve the negative private-router bridge decision.
+- [x] Preserve the negative private-router bridge decision.
 
 ### T3-1 — Read-only accessibility feasibility proof
 
-- [ ] With each app manually launched by the user, obtain a bounded raw dump and
-      confirm the package/window identity.
+- [x] With Gio Kit manually launched by the user, obtain a bounded raw dump and
+      confirm the package/window identity. ADL-Gio capture was unnecessary after
+      the shared Gio Android accessibility path met the stop-negative condition.
 - [ ] Confirm primary navigation, at least one button, one editor, one dialog,
       one list/grid item, and disabled/selected state where applicable appear as
       distinct virtual nodes with non-empty display bounds.
@@ -357,9 +406,10 @@ CLI or app instrumentation merely because XML parsing is possible.
 
 ### T3-8 — Optional app-side geometry fallback
 
-This task is not automatically authorized by a negative T3-1 result.
+This task was explicitly authorized by the user on 2026-09-10 after the
+negative T3-1 result.
 
-- [ ] Document the exact missing UI Automator evidence and why semantic fixes do
+- [x] Document the exact missing UI Automator evidence and why semantic fixes do
       not solve it.
 - [ ] Prove a public Gio/app API can report transform-correct absolute bounds,
       clipping, viewport/inset changes, and frame generation without reading the
@@ -372,6 +422,10 @@ This task is not automatically authorized by a negative T3-1 result.
 
 **Stop negative** if absolute transforms or freshness cannot be proven. Do not
 use approximate coordinates for ADB input.
+
+**Result:** Stopped negative. Public APIs cannot prove absolute display origin,
+effective clipping, and arbitrary-transform correctness; no exporter was
+implemented.
 
 ## Multi-Agent Execution Plan
 

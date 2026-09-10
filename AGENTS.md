@@ -56,6 +56,20 @@ Pure widget or application-policy changes do not automatically trigger Gate C. B
 
 Agents must never install or launch APKs automatically through ADB, `pm`, `am`, `monkey`, Termux intents, or equivalent mechanisms, even when ADB is available. The user owns installation, launch, lifecycle actions, and visual acceptance. Unit and integration tests remain required but do not replace applicable device testing.
 
+During a user-authorized device-test session, agents may send device input only
+through this repository's `device-ui` helper, bound to one explicit ADB serial
+and one application ID. Before every mutating action, the helper must verify
+that the authorized package owns the foreground window and that the freshly
+resolved accessibility node belongs to it. The helper may perform only its
+allowlisted tap, stationary-swipe long press, swipe/scroll, Android Back
+or bounded key event, and safe text-entry actions. It must not expose arbitrary
+`adb shell`, interpolate commands, install or launch packages, start or stop
+activities or processes, clear data, change rotation, permissions, or settings,
+or retry uncertain input. The user still performs launch, rotation/resize,
+background/resume, manual stop/relaunch, TalkBack operation, and visual
+acceptance. Pairing material, serials, raw private UI trees, screenshots,
+databases, logs, and action-session files must remain outside commits.
+
 ## Coding and Test Standards
 
 For testing-framework implementation or use, read `docs/guitest.md` and

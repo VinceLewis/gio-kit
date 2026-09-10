@@ -4,6 +4,37 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-10: authorized T3-8 fallback feasibility stopped negative. Public Gio
+  v0.10.2 application APIs can replay submitted operations into window-local
+  semantic bounds, but cannot expose the native view's absolute display origin,
+  effective ancestor clipping, generally correct arbitrary-affine bounds, or
+  the live window-owned semantic tree. UI Automator cannot provide the missing
+  virtual-node comparison. No exporter, transport, APK, or device input was
+  created. Proceeding would require a new decision to relax authoritative-bound
+  requirements or permit a maintained Gio platform patch/private adapter.
+- 2026-09-10: user explicitly authorized the bounded T3-8 app-side geometry
+  fallback feasibility study after the T3-1 stop-negative result. The study
+  must still stop if public Gio APIs cannot prove transform-correct absolute
+  bounds and freshness; approximate/manual coordinates, a shadow layout,
+  private router access, and release control surfaces remain prohibited.
+- 2026-09-10: `testing-implementation-3.md` stopped negative at T3-1. With the
+  user-manually foregrounded `app.giokit.cruddemo` on explicit serial
+  `localhost:42211`, two bounded UI Automator captures reliably identified the
+  package/window and 1080×2388 display but contained only six generic Android
+  wrapper/surface nodes. There were no Gio labels, descriptions, clickable
+  controls, editors, selected states, or scroll targets. Raw captures were
+  deleted; no input was sent. Per the approved stop condition, no `deviceui`
+  package, ADB runner, CLI, demo workflow, publication, or ADL wrapper was
+  started. T3-8 remains unauthorized and the private-router bridge decision is
+  unchanged.
+- 2026-09-10: user approved `testing-implementation-3.md` for execution and
+  confirmed ADB is connected if required. The scoped governance amendment is
+  active in Gio-Kit and ADL-Gio: device input is permitted only through the
+  repository-owned helper for one explicit serial/package session with fresh
+  accessibility resolution and foreground ownership checks. Installation,
+  launch, lifecycle/settings changes, arbitrary shell access, private artifacts,
+  and visual acceptance remain outside agent authority. Baselines before this
+  work are Gio-Kit `4a45d0eff261` and ADL-Gio `b010b31743e3`.
 - 2026-09-10: framework-first extension implementation is complete through the
   Gio-Kit Gate B checkpoint. Added viewport/keyboard-contraction matrices,
   focus/selection/composition-shaped editing, a bounded asynchronous adapter
