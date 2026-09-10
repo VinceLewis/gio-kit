@@ -2,7 +2,9 @@
 
 ## Status and Decision Gate
 
-**Status:** Proposed; implementation has not started.
+**Status:** Phase 1 stopped negative on 2026-09-10; see
+`docs/guitest-bridge.md`. Phase 2 is not authorized under the current Gio
+v0.10.2 API and spike constraints.
 **Scope:** Gio-Kit testing infrastructure and its Android demo only.
 **Objective:** Let a repository-owned Termux CLI inspect and drive a manually
 launched debug APK through Gio-Kit's existing semantic test vocabulary, without

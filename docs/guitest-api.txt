@@ -20,6 +20,11 @@ var (
 	ErrAmbiguous       = errors.New("guitest: selector is ambiguous")
 	ErrNotInteractable = errors.New("guitest: target is not interactable")
 )
+var (
+	ErrClipboardUnavailable = errors.New("guitest: clipboard unavailable")
+	ErrClipboardDenied      = errors.New("guitest: clipboard denied")
+	ErrClipboardTooLarge    = errors.New("guitest: clipboard data too large")
+)
 var ErrOutputLimit = errors.New("guitest: diagnostic output exceeds byte limit")
 
 FUNCTIONS
@@ -37,6 +42,14 @@ type Bounds struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
 }
+
+type ClipboardAdapter interface {
+	ReadClipboard(context.Context) (string, error)
+	WriteClipboard(context.Context, string, []byte) error
+}
+    ClipboardAdapter replaces the platform clipboard behind Gio's real
+    clipboard.ReadCmd and clipboard.WriteCmd routing. Methods run on worker
+    goroutines and must honor context cancellation.
 
 type Clock struct {
 	// Has unexported fields.
@@ -84,6 +97,13 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error)
     are deterministic tree indices, not identities stable across different
     trees.
 
+func (d *Driver) ClearFocus() error
+    ClearFocus models platform focus loss without requiring an app.Window.
+
+func (d *Driver) ClipboardError() error
+    ClipboardError reports the latest completed platform-adapter error. A nil
+    result includes successful empty reads and successful writes.
+
 func (d *Driver) Clock() *Clock
 
 func (d *Driver) Close() error
@@ -100,7 +120,13 @@ func (d *Driver) DumpJSON(writer io.Writer, options DumpOptions) error
     DumpJSON writes one complete bounded JSON document. Capture errors leave the
     writer untouched; writer failures and short writes are returned.
 
+func (d *Driver) Edit(selection key.Range, value string) error
+    Edit replaces a rune range in the focused editor through a Gio EditEvent.
+
 func (d *Driver) Find(selector Selector) (Node, error)
+
+func (d *Driver) Focus(selector Selector) error
+    Focus gives an editor focus through real pointer routing.
 
 func (d *Driver) Frame() error
     Frame performs one real layout/Router.Frame cycle at the current virtual
@@ -154,6 +180,14 @@ func (d *Driver) Scroll(selector Selector, delta f32.Point) error
     ancestor. Positive Y moves toward later rows. Delta is in physical pixels.
     Use Drag to exercise touch scrolling and its gesture arbitration.
 
+func (d *Driver) SetComposition(composition key.Range) error
+    SetComposition sends a rune-based input-method composition range to the
+    focused editor. It simulates event shape, not a real Android IME.
+
+func (d *Driver) SetSelection(selection key.Range) error
+    SetSelection sends a rune-based input-method selection event to the focused
+    editor. The extra frame observes commands emitted while consuming the event.
+
 func (d *Driver) Settle(ctx context.Context) error
     Settle waits for no immediately due redraw and application Idle. Immediate
     animation redraws advance by a virtual 1/60 second; future-only redraws (for
@@ -166,10 +200,9 @@ func (d *Driver) Tap(selector Selector) error
     input but do not wait for external work: use Settle or WaitFor explicitly.
 
 func (d *Driver) Type(selector Selector, value string) error
-    Type focuses an editor by pointer input and replaces its current selection
-    using a Gio EditEvent. Offsets are rune-based, as required by Gio.
+    Type focuses an editor by pointer input and replaces its current selection.
     This tests the editor input path; it does not test Android's software
-    keyboard/IME.
+    keyboard or IME.
 
 func (d *Driver) WaitFor(ctx context.Context, predicate func() bool) error
     WaitFor checks a predicate after frames. It supports observing intermediate
@@ -278,6 +311,11 @@ func Size(width, height int) Option
     Size sets physical pixels. Metrics determines the dp/sp conversion.
 
 func StartTime(epoch time.Time) Option
+
+func WithClipboard(adapter ClipboardAdapter, maxBytes int) Option
+    WithClipboard injects a clipboard adapter without coupling tests to a
+    platform window. A nil adapter models an unavailable clipboard. maxBytes
+    bounds accepted results before they can reach application state.
 
 type Selector func(Node) bool
 

@@ -50,13 +50,16 @@ type Harness struct {
 type Option func(*config)
 
 type config struct {
-	size      image.Point
-	metric    unit.Metric
-	locale    system.Locale
-	epoch     time.Time
-	maxFrames int
-	interval  time.Duration
-	bindings  []idBinding
+	size                image.Point
+	metric              unit.Metric
+	locale              system.Locale
+	epoch               time.Time
+	maxFrames           int
+	interval            time.Duration
+	bindings            []idBinding
+	clipboardConfigured bool
+	clipboardAdapter    ClipboardAdapter
+	clipboardMaxBytes   int
 }
 
 // Size sets physical pixels. Metrics determines the dp/sp conversion.
@@ -65,6 +68,17 @@ func Metrics(metric unit.Metric) Option  { return func(c *config) { c.metric = m
 func Locale(locale system.Locale) Option { return func(c *config) { c.locale = locale } }
 func StartTime(epoch time.Time) Option   { return func(c *config) { c.epoch = epoch } }
 func MaxFrames(limit int) Option         { return func(c *config) { c.maxFrames = limit } }
+
+// WithClipboard injects a clipboard adapter without coupling tests to a
+// platform window. A nil adapter models an unavailable clipboard. maxBytes
+// bounds accepted results before they can reach application state.
+func WithClipboard(adapter ClipboardAdapter, maxBytes int) Option {
+	return func(c *config) {
+		c.clipboardConfigured = true
+		c.clipboardAdapter = adapter
+		c.clipboardMaxBytes = maxBytes
+	}
+}
 
 type idBinding struct {
 	id       string
@@ -82,20 +96,22 @@ func BindID(id string, selector Selector) Option {
 // and Clock's read/wait methods must be called on one goroutine. A layout must
 // never perform blocking I/O: the driver cannot preempt a blocked Layout call.
 type Driver struct {
-	config   config
-	app      Harness
-	router   input.Router
-	ops      op.Ops
-	clock    *Clock
-	cancel   context.CancelFunc
-	wake     chan struct{}
-	closed   atomic.Bool
-	closeErr error
-	frame    uint64
-	wakeupAt time.Time
-	wakeup   bool
-	nodes    []Node
-	pressed  *pointer.Event
+	config       config
+	app          Harness
+	router       input.Router
+	ops          op.Ops
+	clock        *Clock
+	cancel       context.CancelFunc
+	wake         chan struct{}
+	closed       atomic.Bool
+	closeErr     error
+	frame        uint64
+	wakeupAt     time.Time
+	wakeup       bool
+	nodes        []Node
+	pressed      *pointer.Event
+	clipboard    *clipboardBridge
+	clipboardErr error
 }
 
 func New(root LayoutFunc, options ...Option) (*Driver, error) {
@@ -113,7 +129,8 @@ func NewApp(create func(Environment) (Harness, error), options ...Option) (*Driv
 		}
 		option(&c)
 	}
-	if c.size.X <= 0 || c.size.Y <= 0 || !validMetric(c.metric) || c.maxFrames <= 0 || create == nil {
+	if c.size.X <= 0 || c.size.Y <= 0 || !validMetric(c.metric) || c.maxFrames <= 0 || create == nil ||
+		(c.clipboardConfigured && c.clipboardMaxBytes <= 0) {
 		return nil, errors.New("guitest: invalid configuration")
 	}
 	seenIDs := make(map[string]bool)
@@ -126,6 +143,9 @@ func NewApp(create func(Environment) (Harness, error), options ...Option) (*Driv
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Driver{config: c, cancel: cancel, wake: make(chan struct{}, 1)}
 	d.clock = &Clock{now: c.epoch, timers: make(map[uint64]clockTimer), notify: d.Invalidate}
+	if c.clipboardConfigured {
+		d.clipboard = newClipboardBridge(ctx, c.clipboardAdapter, c.clipboardMaxBytes, d.Invalidate)
+	}
 	app, err := create(Environment{Context: ctx, Clock: d.clock, Invalidate: d.Invalidate})
 	d.app = app
 	if err != nil || app.Layout == nil {
@@ -182,6 +202,7 @@ func (d *Driver) Frame() error {
 	if d.closed.Load() {
 		return ErrClosed
 	}
+	d.receiveClipboard()
 	select {
 	case <-d.wake:
 	default:
@@ -193,6 +214,7 @@ func (d *Driver) Frame() error {
 	d.app.Layout(gtx)
 	viewport.Pop()
 	d.router.Frame(&d.ops)
+	d.sendClipboard()
 	d.frame++
 	d.captureNodes()
 	d.wakeupAt, d.wakeup = d.router.WakeupTime()
@@ -300,8 +322,12 @@ func (d *Driver) Close() error {
 	if d.app.Close != nil {
 		d.closeErr = d.app.Close()
 	}
+	if d.clipboard != nil {
+		d.closeErr = errors.Join(d.closeErr, d.clipboard.Close())
+	}
 	d.router.Frame(nil)
 	d.ops.Reset()
 	d.nodes = nil
+	d.pressed = nil
 	return d.closeErr
 }

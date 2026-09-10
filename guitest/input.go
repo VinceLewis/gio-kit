@@ -306,21 +306,58 @@ func (d *Driver) tapAt(p f32.Point) error {
 	return d.Release()
 }
 
-// Type focuses an editor by pointer input and replaces its current selection
-// using a Gio EditEvent. Offsets are rune-based, as required by Gio. This tests
-// the editor input path; it does not test Android's software keyboard/IME.
-func (d *Driver) Type(selector Selector, value string) error {
+// Focus gives an editor focus through real pointer routing.
+func (d *Driver) Focus(selector Selector) error {
 	p, err := d.target(selector, true)
 	if err != nil {
 		return err
 	}
-	if err := d.tapAt(p); err != nil {
-		return err
+	return d.tapAt(p)
+}
+
+// ClearFocus models platform focus loss without requiring an app.Window.
+func (d *Driver) ClearFocus() error {
+	if d.closed.Load() {
+		return ErrClosed
 	}
-	if err := d.Queue(key.EditEvent{Range: d.router.EditorState().Selection.Range, Text: value}); err != nil {
+	d.router.Source().Execute(key.FocusCmd{})
+	return d.Frame()
+}
+
+// SetSelection sends a rune-based input-method selection event to the focused
+// editor. The extra frame observes commands emitted while consuming the event.
+func (d *Driver) SetSelection(selection key.Range) error {
+	if err := d.Queue(key.SelectionEvent(selection)); err != nil {
 		return err
 	}
 	return d.Frame()
+}
+
+// SetComposition sends a rune-based input-method composition range to the
+// focused editor. It simulates event shape, not a real Android IME.
+func (d *Driver) SetComposition(composition key.Range) error {
+	if err := d.Queue(key.CompositionEvent(composition)); err != nil {
+		return err
+	}
+	return d.Frame()
+}
+
+// Edit replaces a rune range in the focused editor through a Gio EditEvent.
+func (d *Driver) Edit(selection key.Range, value string) error {
+	if err := d.Queue(key.EditEvent{Range: selection, Text: value}); err != nil {
+		return err
+	}
+	return d.Frame()
+}
+
+// Type focuses an editor by pointer input and replaces its current selection.
+// This tests the editor input path; it does not test Android's software
+// keyboard or IME.
+func (d *Driver) Type(selector Selector, value string) error {
+	if err := d.Focus(selector); err != nil {
+		return err
+	}
+	return d.Edit(d.router.EditorState().Selection.Range, value)
 }
 
 // Key sends a key press/release through the same filters as real keyboard input.

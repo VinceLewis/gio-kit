@@ -4,6 +4,11 @@
 *.idsig
 *.so
 *.keystore
+*.jks
 *.db
+*.sqlite
+*.sqlite3
+/native-extract/
+/apk-extract/
 .idea/
 .vscode/

@@ -4,6 +4,31 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-10: framework-first extension implementation is complete through the
+  Gio-Kit Gate B checkpoint. Added viewport/keyboard-contraction matrices,
+  focus/selection/composition-shaped editing, a bounded asynchronous adapter
+  behind Gio's real clipboard commands, pointer-edge/threshold/cancel/recovery
+  cases, repeated real-root reconstruction, rapid-navigation ordering, and
+  direct component snapshot/semantic contracts. `./tools/test-checkpoint.sh
+  -count=1` passed, including CGO-on/off core tests, the production demo root,
+  full Termux tests/vet, and generated-reference verification. The production
+  demo dependency graph does not import `guitest`; no rendering, packaging, or
+  Android platform seam changed, so no redundant APK or Gate C run is required.
+  Real IME/clipboard policy/insets, TalkBack, Android lifecycle/process, touch
+  physics, and device GPU/display behavior remain device-only.
+- 2026-09-10: user approved `testing-implementation-2.md` for execution. Gates
+  A–D replace the historical per-material-change and three-requirement device
+  pauses. In-process production-root tests are the normal UI development gate;
+  platform smoke is triggered by a new or materially changed platform seam;
+  comprehensive device acceptance is performed against a frozen candidate.
+  The user continues to own APK installation, launch, lifecycle actions, and
+  visual acceptance; agents do not automate them through ADB or equivalent
+  mechanisms.
+- 2026-09-10: user authorized execution of `testing-debug-bridge.md` through
+  the definitive Phase 1 feasibility decision. Phase 1 stopped negative at its
+  public Android event-path condition: Gio v0.10.2 exposes no supported way to
+  queue synthetic pointer/editor events into the live window router. No tagged
+  server or APK was retained, and Phase 2 must not proceed.
 - Started: 2026-09-09. User confirmed GPT-6 Astra / max and authorized commit,
   push, and execution of the plan.
 - Status: **coding and automated verification complete; device acceptance pending**. On
@@ -37,7 +62,7 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 | 8 | Tested human/LLM guide and adl-gio consumer pilot | Complete; published dependency verified with local overrides disabled |
 | 9 | Separately built optional screenshots | Complete; headless pixel readback passed on this host |
 | 10 | N*, G*, and form acceptance scenarios | Automated checks passed; combined device gate pending |
-| 11 | Evaluate manually launched device control bridge | Complete evaluation; implementation deferred pending device transport/security spike |
+| 11 | Evaluate manually launched device control bridge | Complete; Phase 1 negative on the required live input seam |
 
 Status values: Pending, In progress, Automated checks passed, Awaiting device
 test, Complete, or Deferred with an explicit reason. A host check or signed APK
@@ -78,9 +103,11 @@ does not constitute device acceptance.
   Both processes were running; their error-level logs showed only Android's
   ashmem deprecation warning. Workflow acceptance remains pending.
   Pairing codes/screenshots are outside the repositories and are not committed.
-- Bridge evaluation completed in [the decision note](docs/guitest-bridge.md).
-  Implementation is deferred until a manual debug transport/security spike;
-  release builds contain no control bridge.
+- Bridge Phase 1 stopped negative at the supported live-input seam; see
+  [the decision note](docs/guitest-bridge.md). `input.Source` cannot inject
+  events into the window-owned router, and private-router, shadow-router, and
+  application-controller substitutes violate the spike rules. Release builds
+  contain no control bridge.
 - Consumer integration is committed as `adl-gio@c5d29eb`, pinning published
   `gio-kit@v0.0.0-20260910002538-1a65d354f88e`. Full consumer verification,
   tagged root tests/vet, module verification and the signed Android build pass

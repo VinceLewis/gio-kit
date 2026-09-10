@@ -13,6 +13,8 @@ CGO_ENABLED=0 ./tools/test-guitest.sh -count=1
 ./tools/test-guitest-demo.sh -count=1
 ./tools/test-termux.sh -count=1
 ./tools/generate-guitest-reference.sh --check
+# Or run the complete non-GPU checkpoint set:
+./tools/test-checkpoint.sh -count=1
 ```
 
 The core script checks the test dependency graph for window/GPU imports. The
@@ -21,6 +23,11 @@ full-suite wrapper supplies pinned NDK headers, API-24 libraries, the existing
 C-warning workaround, and `-llog` only to child commands. Never use `go env -w`
 for these settings. Unconfigured full tests can still miss Vulkan/EGL headers.
 The race detector is unsupported on Android/arm64.
+
+`test-checkpoint.sh` runs the core suite with CGO enabled and disabled, the demo
+root, the Termux full-suite wrapper, and the generated-reference check. The
+optional GPU probe remains separate and is required when rendering or screenshot
+code changes.
 
 The `guitest` tag excludes application window entry points for tests; it is
 not an APK packaging option. Run the sibling ADL pilot with its own
@@ -84,6 +91,18 @@ replace the whole field or test Android's IME. Key sends press/release; Back
 sends Gio's Android-equivalent key. Window fallback focus traversal is outside
 the core contract. Assert UI and controller outcomes after input; direct
 controller changes remain controller tests.
+
+Focus and ClearFocus model acquisition and loss. SetSelection, SetComposition,
+and Edit route rune-based input-method event shapes to the focused editor. They
+exercise replacement and composition-shaped Unicode sequences, but do not prove
+Android IME behavior. Repeated Resize calls can model keyboard-like viewport
+contraction and restoration; real window inset delivery remains device-only.
+
+WithClipboard attaches a bounded asynchronous ClipboardAdapter behind Gio's
+real clipboard ReadCmd/WriteCmd path. Adapter calls run off the frame goroutine,
+must honor cancellation, and are joined on Close. Superseded reads cannot apply
+stale values. ClipboardError exposes unavailable, denied, oversized, or adapter
+failures for assertions. This does not prove Android clipboard policy or UI.
 
 ## Time and async work
 
