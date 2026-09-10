@@ -4,6 +4,10 @@
 
 **Status:** Approved for execution by the user on 2026-09-10.
 
+**Execution result:** GK-1 through GK-6 and ADL-1 through ADL-6 are complete.
+ADL-7 through ADL-9 remain held by B-001 and the resulting absence of a frozen
+M8 candidate; their unchecked device/release items are intentionally pending.
+
 **Repositories:**
 
 - Gio-Kit: `/data/data/com.termux/files/home/projects/gio-kit`
@@ -143,7 +147,7 @@ candidate.
 - [ ] Keep APKs, native extraction files, keys, databases, and build directories
       ignored and outside commits.
 
-### GK-6 — Gio-Kit completion gate — Gate B complete; publication pending
+### GK-6 — Gio-Kit completion gate — Complete
 
 - [ ] Run all Gate B commands after the last framework change.
 - [ ] Build, sign, verify, and copy the demo APK only if framework work changes
@@ -227,7 +231,7 @@ allowed only when the inventory finds an actual coverage or testability gap.
 - [ ] Add bounded/redacted diagnostic captures for failure triage without
       exposing real application data.
 
-### ADL-5 — ADL-Gio automated gates — ADL-only gates complete; final pin pending
+### ADL-5 — ADL-Gio automated gates — Complete
 
 - [ ] Run focused tests while changing the responsible package.
 - [ ] Run `GOWORK=off ./tools/verify.sh` at checkpoints.

@@ -16,6 +16,14 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
   Android platform seam changed, so no redundant APK or Gate C run is required.
   Real IME/clipboard policy/insets, TalkBack, Android lifecycle/process, touch
   physics, and device GPU/display behavior remain device-only.
+- Publication checkpoint: Gio-Kit `7b6c07acf625` is pushed to `origin/main`.
+  ADL-Gio `b010b31` selects the published pseudo-version
+  `v0.0.0-20260910084443-7b6c07acf625`; its workspace-independent production
+  root, full verification, module verification, Android-tagged tests/vet, and
+  signed arm64 build passed. The local evidence APK SHA-256 is
+  `5544f9a26b9eef794f2c115ebde1ccf59e8ee9878f4a49891c97f7fe17ea887e`.
+  It was not copied, installed, launched, or offered as a frozen candidate
+  because ADL B-001 remains open.
 - 2026-09-10: user approved `testing-implementation-2.md` for execution. Gates
   A–D replace the historical per-material-change and three-requirement device
   pauses. In-process production-root tests are the normal UI development gate;
