@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"strings"
 	"time"
 
 	"gioui.org/f32"
 	"gioui.org/io/input"
 	"gioui.org/io/key"
-	"gioui.org/io/pointer"
 	"gioui.org/io/semantic"
 )
 
@@ -27,7 +27,11 @@ type Node struct {
 	Parent int
 	Desc   input.SemanticDesc
 	id     input.SemanticID
+	tree   *frameTree
+	ids    []string
 }
+
+type frameTree struct{ nodes []Node }
 
 type Selector func(Node) bool
 
@@ -38,6 +42,111 @@ func Description(value string) Selector {
 	return func(n Node) bool { return n.Desc.Description == value }
 }
 func Role(class semantic.ClassOp) Selector { return func(n Node) bool { return n.Desc.Class == class } }
+
+// Name matches a literal label, or the nearest named ancestor of an unnamed
+// node. Combine with Role for composed controls, such as a named editor group.
+func Name(value string) Selector {
+	return func(n Node) bool {
+		for {
+			if n.Desc.Label != "" {
+				return n.Desc.Label == value
+			}
+			if n.Parent < 0 || n.tree == nil || n.Parent >= len(n.tree.nodes) {
+				return false
+			}
+			n = n.tree.nodes[n.Parent]
+		}
+	}
+}
+
+func Enabled(value bool) Selector {
+	return func(n Node) bool {
+		for {
+			if n.Desc.Disabled {
+				return !value
+			}
+			if n.Parent < 0 || n.tree == nil || n.Parent >= len(n.tree.nodes) {
+				return value
+			}
+			n = n.tree.nodes[n.Parent]
+		}
+	}
+}
+func Selected(value bool) Selector { return func(n Node) bool { return n.Desc.Selected == value } }
+func Text(value string) Selector {
+	return func(n Node) bool {
+		return strings.Contains(n.Desc.Label, value) || strings.Contains(n.Desc.Description, value)
+	}
+}
+
+// Within matches descendants, excluding the ancestor itself. The ancestry is
+// always evaluated against the current frame, including after virtualization.
+func Within(selector, ancestor Selector) Selector {
+	return func(n Node) bool {
+		if n.tree == nil || selector == nil || ancestor == nil || !selector(n) {
+			return false
+		}
+		for p := n.Parent; p >= 0 && p < len(n.tree.nodes); p = n.tree.nodes[p].Parent {
+			if ancestor(n.tree.nodes[p]) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// Containing matches nodes with a matching descendant, excluding themselves.
+func Containing(selector, descendant Selector) Selector {
+	return func(n Node) bool {
+		if n.tree == nil || selector == nil || descendant == nil || !selector(n) {
+			return false
+		}
+		for _, child := range n.tree.nodes {
+			if !descendant(child) {
+				continue
+			}
+			for p := child.Parent; p >= 0; p = n.tree.nodes[p].Parent {
+				if p == n.Index {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+// Nth explicitly selects a zero-based occurrence in the current semantic tree.
+// Prefer names or scoped selectors when order can change.
+func Nth(selector Selector, occurrence int) Selector {
+	return func(n Node) bool {
+		if n.tree == nil || selector == nil || occurrence < 0 {
+			return false
+		}
+		count := 0
+		for _, candidate := range n.tree.nodes {
+			if selector(candidate) {
+				if count == occurrence {
+					return n.Index == candidate.Index
+				}
+				count++
+			}
+		}
+		return false
+	}
+}
+
+// ID matches a test-only binding supplied with BindID. IDs never enter Gio's
+// accessibility text or depend on native semantic IDs.
+func ID(id string) Selector {
+	return func(n Node) bool {
+		for _, bound := range n.ids {
+			if bound == id {
+				return true
+			}
+		}
+		return false
+	}
+}
 func All(selectors ...Selector) Selector {
 	return func(n Node) bool {
 		for _, selector := range selectors {
@@ -62,6 +171,23 @@ func (d *Driver) captureNodes() {
 			parent = indices[n.ParentID]
 		}
 		d.nodes[i] = Node{Index: i, Parent: parent, Desc: n.Desc, id: n.ID}
+	}
+	tree := &frameTree{nodes: d.nodes}
+	for i := range d.nodes {
+		d.nodes[i].tree = tree
+	}
+	// Evaluate bindings before assigning any IDs: bindings cannot depend on
+	// other bindings, and their declaration order does not affect resolution.
+	ids := make([][]string, len(d.nodes))
+	for _, binding := range d.config.bindings {
+		for i, node := range d.nodes {
+			if binding.selector(node) {
+				ids[i] = append(ids[i], binding.id)
+			}
+		}
+	}
+	for i := range d.nodes {
+		d.nodes[i].ids = ids[i]
 	}
 }
 
@@ -94,6 +220,10 @@ func (d *Driver) Find(selector Selector) (Node, error) {
 }
 
 func (d *Driver) target(selector Selector, editorOnly bool) (f32.Point, error) {
+	return d.targetKind(selector, editorOnly, false)
+}
+
+func (d *Driver) targetKind(selector Selector, editorOnly, scrollOnly bool) (f32.Point, error) {
 	n, err := d.Find(selector)
 	if err != nil {
 		return f32.Point{}, err
@@ -102,7 +232,7 @@ func (d *Driver) target(selector Selector, editorOnly bool) (f32.Point, error) {
 		if n.Desc.Disabled {
 			return f32.Point{}, ErrNotInteractable
 		}
-		if n.Desc.Class == semantic.Editor || (!editorOnly && n.Desc.Gestures&input.ClickGesture != 0) {
+		if scrollOnly && n.Desc.Gestures&input.ScrollGesture != 0 || !scrollOnly && (n.Desc.Class == semantic.Editor || (!editorOnly && n.Desc.Gestures&input.ClickGesture != 0)) {
 			break
 		}
 		if n.Parent < 0 {
@@ -167,19 +297,13 @@ func (d *Driver) Tap(selector Selector) error {
 }
 
 func (d *Driver) tapAt(p f32.Point) error {
-	e := pointer.Event{Kind: pointer.Press, Source: pointer.Touch, PointerID: 1,
-		Position: p, Time: d.clock.Now().Sub(d.config.epoch)}
-	if err := d.Queue(e); err != nil {
+	if err := d.PressAt(p); err != nil {
 		return err
 	}
 	if err := d.clock.advance(50 * time.Millisecond); err != nil {
 		return err
 	}
-	e.Kind, e.Time = pointer.Release, d.clock.Now().Sub(d.config.epoch)
-	if err := d.Queue(e); err != nil {
-		return err
-	}
-	return d.Frame()
+	return d.Release()
 }
 
 // Type focuses an editor by pointer input and replaces its current selection

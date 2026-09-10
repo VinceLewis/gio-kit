@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -175,6 +176,10 @@ func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item
 	}
 	return surface(gtx, background, func(gtx layout.Context) layout.Dimensions {
 		return material.Clickable(gtx, click, func(gtx layout.Context) layout.Dimensions {
+			semantic.Button.Add(gtx.Ops)
+			semantic.LabelOp(item.Label).Add(gtx.Ops)
+			semantic.DescriptionOp(item.DisabledReason).Add(gtx.Ops)
+			semantic.SelectedOp(item.Selected).Add(gtx.Ops)
 			return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, 2)
 				if item.Icon != nil {

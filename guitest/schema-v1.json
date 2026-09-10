@@ -1,0 +1,287 @@
+{
+  "$id": "https://github.com/VinceLewis/gio-kit/guitest/schema-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "components": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "state": {
+            "additionalProperties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "state"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "focus": {
+      "type": "string"
+    },
+    "frame": {
+      "type": "integer"
+    },
+    "idle": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "locale": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "type": "object"
+    },
+    "nodes": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bounds": {
+            "additionalProperties": false,
+            "properties": {
+              "height": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "width",
+              "height"
+            ],
+            "type": "object"
+          },
+          "clipBounds": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "height": {
+                    "type": "integer"
+                  },
+                  "width": {
+                    "type": "integer"
+                  },
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage": {
+            "enum": [
+              "unknown",
+              "covered",
+              "uncovered"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "interactable": {
+            "enum": [
+              "unknown",
+              "yes",
+              "no"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "unknown",
+              "button",
+              "checkbox",
+              "editor",
+              "radio",
+              "switch"
+            ],
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "viewportIntersection": {
+            "additionalProperties": false,
+            "properties": {
+              "height": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "width",
+              "height"
+            ],
+            "type": "object"
+          },
+          "viewportVisibility": {
+            "enum": [
+              "visible",
+              "partially_visible",
+              "clipped"
+            ],
+            "type": "string"
+          },
+          "visibility": {
+            "enum": [
+              "unknown",
+              "visible",
+              "partially_visible",
+              "clipped",
+              "covered",
+              "virtualized"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "label",
+          "description",
+          "bounds",
+          "viewportIntersection",
+          "clipBounds",
+          "visibility",
+          "viewportVisibility",
+          "coverage",
+          "enabled",
+          "selected",
+          "interactable",
+          "actions"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "orientation": {
+      "type": "string"
+    },
+    "pendingTimers": {
+      "type": "integer"
+    },
+    "time": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "viewport": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "type": "integer"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "frame",
+    "time",
+    "viewport",
+    "metrics",
+    "locale",
+    "orientation",
+    "focus",
+    "idle",
+    "pendingTimers",
+    "nodes",
+    "components",
+    "truncated"
+  ],
+  "title": "Gio test frame dump, version 1",
+  "type": "object"
+}

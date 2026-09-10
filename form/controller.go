@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -23,17 +24,20 @@ type field struct {
 }
 
 type Form struct {
-	mu         sync.RWMutex
-	order      []string
-	fields     map[string]*field
-	rules      []UIRule
-	submit     Submitter
-	onSuccess  func(map[string]string)
-	onCancel   func()
-	notify     func()
-	submitting bool
-	submitErr  error
-	closed     bool
+	active       atomic.Int64
+	workers      sync.WaitGroup
+	submitCancel context.CancelFunc
+	mu           sync.RWMutex
+	order        []string
+	fields       map[string]*field
+	rules        []UIRule
+	submit       Submitter
+	onSuccess    func(map[string]string)
+	onCancel     func()
+	notify       func()
+	submitting   bool
+	submitErr    error
+	closed       bool
 }
 
 func New(schema []FieldSchema, rules []UIRule, notify func()) (*Form, error) {
@@ -182,6 +186,10 @@ func (f *Form) Cancel() {
 
 func (f *Form) Submit(ctx context.Context) error {
 	f.mu.Lock()
+	if f.closed {
+		f.mu.Unlock()
+		return errors.New("form: closed")
+	}
 	if f.submitting {
 		f.mu.Unlock()
 		return ErrSubmitting
@@ -201,17 +209,29 @@ func (f *Form) Submit(ctx context.Context) error {
 		return errors.New("form: submitter is not configured")
 	}
 	f.submitting, f.submitErr = true, nil
+	ctx, f.submitCancel = context.WithCancel(ctx)
+	cancel := f.submitCancel
+	f.workers.Add(1)
+	f.active.Add(1)
 	values, submit := f.valuesLocked(), f.submit
 	notify := f.notify
 	f.mu.Unlock()
 	if notify != nil {
 		notify()
 	}
-	go f.runSubmit(ctx, submit, values)
+	go f.runSubmit(ctx, submit, values, cancel)
 	return nil
 }
 
-func (f *Form) runSubmit(ctx context.Context, submit Submitter, values map[string]string) {
+func (f *Form) runSubmit(ctx context.Context, submit Submitter, values map[string]string, cancel context.CancelFunc) {
+	defer func() {
+		cancel()
+		f.active.Add(-1)
+		if f.notify != nil {
+			f.notify()
+		}
+		f.workers.Done()
+	}()
 	err := submit(ctx, values)
 	f.mu.Lock()
 	if f.closed {
@@ -270,9 +290,19 @@ func (f *Form) Snapshot() Snapshot {
 
 func (f *Form) Close() {
 	f.mu.Lock()
+	if f.submitCancel != nil {
+		f.submitCancel()
+	}
 	f.closed = true
 	f.mu.Unlock()
 }
+
+// Wait joins submissions after Close. Use outside Layout and submit/success
+// callbacks; submitters must honor cancellation for bounded shutdown.
+func (f *Form) Wait() { f.workers.Wait() }
+
+// Pending includes completion callbacks, even after Submitting becomes false.
+func (f *Form) Pending() bool { return f.active.Load() != 0 }
 
 func (f *Form) effectiveLocked(id string) (visible, mandatory, readOnly bool) {
 	item := f.fields[id]

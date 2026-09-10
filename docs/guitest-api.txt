@@ -1,0 +1,404 @@
+package guitest // import "github.com/VinceLewis/gio-kit/guitest"
+
+Package guitest drives Gio layouts without a window or graphics backend.
+It provides deterministic input, semantic selectors, bounded redacted JSON
+diagnostics, and optional component snapshots. See docs/guitest.md for tested
+workflows; Android behavior still requires device acceptance.
+
+CONSTANTS
+
+const SchemaVersion = 1
+
+VARIABLES
+
+var (
+	ErrClosed     = errors.New("guitest: driver closed")
+	ErrFrameLimit = errors.New("guitest: frame limit exceeded")
+)
+var (
+	ErrNotFound        = errors.New("guitest: selector did not match")
+	ErrAmbiguous       = errors.New("guitest: selector is ambiguous")
+	ErrNotInteractable = errors.New("guitest: target is not interactable")
+)
+var ErrOutputLimit = errors.New("guitest: diagnostic output exceeds byte limit")
+
+FUNCTIONS
+
+func JSONSchema() []byte
+    JSONSchema generates the version-1 schema from public dump types. The
+    checked-in schema is verified against this output by the core tests.
+
+
+TYPES
+
+type Bounds struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+type Clock struct {
+	// Has unexported fields.
+}
+    Clock provides virtual frame time and cancellable application delays.
+    Only Driver.Advance and due-frame settling advance it; wall time never does.
+    Now, Sleep, and Pending are safe to call from asynchronous workers.
+
+func (c *Clock) Now() time.Time
+
+func (c *Clock) Pending() int
+    Pending reports registered Sleep calls whose deadlines have not been
+    reached.
+
+func (c *Clock) Sleep(ctx context.Context, duration time.Duration) error
+    Sleep waits for virtual time or context cancellation. Tests should observe
+    Pending or an application readiness condition before advancing a worker's
+    delay: scheduling a goroutine does not mean it has registered its timer yet.
+
+type Driver struct {
+	// Has unexported fields.
+}
+    Driver owns Gio input routing and operations. All methods except Invalidate
+    and Clock's read/wait methods must be called on one goroutine. A layout must
+    never perform blocking I/O: the driver cannot preempt a blocked Layout call.
+
+func New(root LayoutFunc, options ...Option) (*Driver, error)
+
+func NewApp(create func(Environment) (Harness, error), options ...Option) (*Driver, error)
+    NewApp constructs the application before its first frame. Cleanup is invoked
+    even on a factory error if the factory returns a partial Harness with Close.
+
+func (d *Driver) Advance(duration time.Duration) error
+    Advance moves virtual time forward and lays out one frame. Workers awakened
+    by a clock deadline may still be running; use WaitFor/Settle to observe
+    them.
+
+func (d *Driver) Back() error
+
+func (d *Driver) CancelPointer() error
+
+func (d *Driver) Capture(options DumpOptions) (Dump, error)
+    Capture reads the last frame without advancing time or settling the app.
+    Unknown clip, coverage and focus facts are explicit. IDs without bindings
+    are deterministic tree indices, not identities stable across different
+    trees.
+
+func (d *Driver) Clock() *Clock
+
+func (d *Driver) Close() error
+    Close cancels Environment.Context before invoking application cleanup.
+    It is idempotent; applications must join their workers in Harness.Close.
+
+func (d *Driver) DoubleTap(selector Selector) error
+
+func (d *Driver) Drag(selector Selector, delta f32.Point, duration time.Duration) error
+    Drag moves a touch by delta pixels over virtual duration. Steps are bounded
+    by MaxFrames. Gio decides drag ownership and fling behavior.
+
+func (d *Driver) DumpJSON(writer io.Writer, options DumpOptions) error
+    DumpJSON writes one complete bounded JSON document. Capture errors leave the
+    writer untouched; writer failures and short writes are returned.
+
+func (d *Driver) Find(selector Selector) (Node, error)
+
+func (d *Driver) Frame() error
+    Frame performs one real layout/Router.Frame cycle at the current virtual
+    time. It does not wait for application work or advance future timers.
+
+func (d *Driver) FrameNumber() uint64
+
+func (d *Driver) Invalidate()
+    Invalidate coalesces asynchronous wakeups. It is safe after Close.
+
+func (d *Driver) Key(name key.Name, modifiers key.Modifiers) error
+    Key sends a key press/release through the same filters as real keyboard
+    input. Window-provided fallback focus traversal is outside the core driver's
+    scope.
+
+func (d *Driver) LongPress(selector Selector, duration time.Duration) error
+    LongPress holds a touch for an explicit virtual duration, then releases it.
+
+func (d *Driver) Move(p f32.Point) error
+    Move sends a held touch to pixel coordinates, including outside the
+    viewport.
+
+func (d *Driver) Nodes() []Node
+    Nodes returns a frame-local copy. Diagnostic serialization and redaction
+    belong to the versioned dump API; raw semantics can contain application
+    data.
+
+func (d *Driver) Press(selector Selector) error
+    Press begins a touch gesture at a semantic target. Advance and Move can
+    inspect intermediate states before Release or CancelPointer ends it.
+
+func (d *Driver) PressAt(p f32.Point) error
+    PressAt begins a touch at viewport pixel coordinates. It intentionally has
+    no semantic targeting check; use Press when a semantic target is available.
+
+func (d *Driver) Queue(events ...event.Event) error
+    Queue injects raw Gio events and lays out one frame to consume them. High
+    level actions add the extra frames required for deferred input commands.
+
+func (d *Driver) Release() error
+
+func (d *Driver) Render(render func(*op.Ops, image.Point) error) error
+    Render supplies the current operation list to an optional renderer without
+    importing a graphics backend. The callback must not retain or mutate Ops,
+    block indefinitely, or call Driver methods. Render does not advance a frame.
+
+func (d *Driver) Resize(width, height int, metric unit.Metric) error
+
+func (d *Driver) Scroll(selector Selector, delta f32.Point) error
+    Scroll sends a mouse-wheel event to the target's nearest scrollable
+    ancestor. Positive Y moves toward later rows. Delta is in physical pixels.
+    Use Drag to exercise touch scrolling and its gesture arbitration.
+
+func (d *Driver) Settle(ctx context.Context) error
+    Settle waits for no immediately due redraw and application Idle. Immediate
+    animation redraws advance by a virtual 1/60 second; future-only redraws (for
+    example caret blinking) do not keep settling alive. Pending application
+    delays need an explicit Advance. A context deadline bounds real worker
+    waits.
+
+func (d *Driver) Tap(selector Selector) error
+    Tap sends touch press/release events with separate frames. Actions process
+    input but do not wait for external work: use Settle or WaitFor explicitly.
+
+func (d *Driver) Type(selector Selector, value string) error
+    Type focuses an editor by pointer input and replaces its current selection
+    using a Gio EditEvent. Offsets are rune-based, as required by Gio.
+    This tests the editor input path; it does not test Android's software
+    keyboard/IME.
+
+func (d *Driver) WaitFor(ctx context.Context, predicate func() bool) error
+    WaitFor checks a predicate after frames. It supports observing intermediate
+    loading/error states without requiring the whole application to become idle.
+
+type Dump struct {
+	Version       int                             `json:"version"`
+	Frame         uint64                          `json:"frame"`
+	Time          time.Time                       `json:"time"`
+	Viewport      Bounds                          `json:"viewport"`
+	Metrics       map[string]float32              `json:"metrics"`
+	Locale        map[string]string               `json:"locale"`
+	Orientation   string                          `json:"orientation"`
+	Focus         string                          `json:"focus"`
+	Idle          *bool                           `json:"idle"`
+	PendingTimers int                             `json:"pendingTimers"`
+	Nodes         []FrameNode                     `json:"nodes"`
+	Components    map[string]diagnostic.Component `json:"components"`
+	Truncated     bool                            `json:"truncated"`
+}
+
+func ReadDump(reader io.Reader, maxBytes int) (Dump, error)
+    ReadDump validates version, shape and enumerations against the generated
+    schema. It caps input before decoding. It does not re-redact an external
+    dump; only read artifacts from trusted producers, and treat their text as
+    data.
+
+type DumpOptions struct {
+	MaxBytes, MaxNodes, MaxDepth, MaxValues, MaxStringBytes int
+	Component                                               string
+	Request                                                 diagnostic.Request
+	Redact                                                  func(path, value string) string
+}
+    DumpOptions can tighten hard limits but cannot disable redaction.
+    Redact supplies additional string redaction after safe defaults. Component
+    restricts output to one provider; Request selects a bounded logical item
+    sample.
+
+type Environment struct {
+	Context    context.Context
+	Clock      *Clock
+	Invalidate func()
+}
+    Environment supplies the platform services replaced by an in-process test.
+    Applications keep their own storage, theme, records, and application policy.
+
+type FrameNode struct {
+	ID                   string   `json:"id"`
+	Parent               string   `json:"parent,omitempty"`
+	Role                 string   `json:"role"`
+	Label                string   `json:"label"`
+	Description          string   `json:"description"`
+	Bounds               Bounds   `json:"bounds"`
+	ViewportIntersection Bounds   `json:"viewportIntersection"`
+	ClipBounds           *Bounds  `json:"clipBounds"`
+	Visibility           string   `json:"visibility"`
+	ViewportVisibility   string   `json:"viewportVisibility"`
+	Coverage             string   `json:"coverage"`
+	Enabled              bool     `json:"enabled"`
+	Selected             bool     `json:"selected"`
+	Interactable         string   `json:"interactable"`
+	Actions              []string `json:"actions"`
+}
+
+type Harness struct {
+	Layout LayoutFunc
+	Idle   func() bool
+	Close  func() error
+	// Providers are queried on the frame goroutine during diagnostic capture.
+	Providers map[string]diagnostic.Provider
+}
+    Harness binds an application's existing root and lifecycle to the driver.
+    Idle is evaluated on the frame goroutine and must include queued
+    completions, not just running workers. Nil Idle means there is no external
+    work to track. Close must cancel and join application-owned workers before
+    releasing storage.
+
+type LayoutFunc func(layout.Context) layout.Dimensions
+
+type Node struct {
+	Index  int
+	Parent int
+	Desc   input.SemanticDesc
+
+	// Has unexported fields.
+}
+    Node is a copy of public Gio semantics. Index and Parent refer to
+    this frame only; Parent is -1 for the root. Bounds do not prove exact
+    clipping/occlusion. The native semantic ID is intentionally not exposed as a
+    persistent test ID.
+
+type Option func(*config)
+
+func BindID(id string, selector Selector) Option
+    BindID annotates matching nodes in driver diagnostics only. Bindings are
+    re-evaluated each frame and may use labels, roles and ancestry, but not ID.
+    Ambiguous bindings remain ambiguous; Find and actions reject them.
+
+func Locale(locale system.Locale) Option
+
+func MaxFrames(limit int) Option
+
+func Metrics(metric unit.Metric) Option
+
+func Size(width, height int) Option
+    Size sets physical pixels. Metrics determines the dp/sp conversion.
+
+func StartTime(epoch time.Time) Option
+
+type Selector func(Node) bool
+
+func All(selectors ...Selector) Selector
+
+func Containing(selector, descendant Selector) Selector
+    Containing matches nodes with a matching descendant, excluding themselves.
+
+func Description(value string) Selector
+
+func Enabled(value bool) Selector
+
+func ID(id string) Selector
+    ID matches a test-only binding supplied with BindID. IDs never enter Gio's
+    accessibility text or depend on native semantic IDs.
+
+func Label(value string) Selector
+    Label matches a node's literal Gio label. A button's label may be a child
+    of its input handler; Tap resolves that child to the nearest actionable
+    ancestor.
+
+func Name(value string) Selector
+    Name matches a literal label, or the nearest named ancestor of an unnamed
+    node. Combine with Role for composed controls, such as a named editor group.
+
+func Nth(selector Selector, occurrence int) Selector
+    Nth explicitly selects a zero-based occurrence in the current semantic tree.
+    Prefer names or scoped selectors when order can change.
+
+func Role(class semantic.ClassOp) Selector
+
+func Selected(value bool) Selector
+
+func Text(value string) Selector
+
+func Within(selector, ancestor Selector) Selector
+    Within matches descendants, excluding the ancestor itself. The ancestry is
+    always evaluated against the current frame, including after virtualization.
+
+package diagnostic // import "github.com/VinceLewis/gio-kit/diagnostic"
+
+Package diagnostic defines bounded, application-independent component
+inspection. Providers must return promptly and never start I/O or mutate UI.
+
+CONSTANTS
+
+const Redacted = "[redacted]"
+
+FUNCTIONS
+
+func SensitiveName(value string) bool
+    SensitiveName is a conservative default for common credential and binary
+    field names. Applications should additionally mark their own private fields.
+
+
+TYPES
+
+type Component struct {
+	Kind            string         `json:"kind"`
+	State           map[string]any `json:"state"`
+	SensitiveLabels []string       `json:"-"`
+}
+    Component.State contains JSON-like values. Consumers must bound and redact
+    it before serialization; raw snapshots, like raw Gio semantics, can be
+    private. SensitiveLabels names control groups whose descendants contain
+    private data.
+
+type Provider interface{ DebugSnapshot(Request) Component }
+
+type ProviderFunc func(Request) Component
+
+func (f ProviderFunc) DebugSnapshot(r Request) Component
+
+type Request struct {
+	Offset   int    `json:"offset"`
+	Limit    int    `json:"limit"`
+	RecordID string `json:"recordId,omitempty"`
+}
+    Request selects a small logical sample. Limit is clamped to [1,128], with a
+    default of 20. RecordID requests a particular loaded record when supported.
+
+func (r Request) Bounded() Request
+
+type Sensitive struct{ Value any }
+    Sensitive is unconditionally redacted by guitest diagnostics. Wrapping a
+    value cannot be overridden by a consumer's additional redaction policy.
+
+package screenshot // import "github.com/VinceLewis/gio-kit/guitest/screenshot"
+
+Package screenshot optionally renders a guitest frame. The default build is
+graphics-free; the guitestgpu tag explicitly selects Gio's headless backend.
+
+VARIABLES
+
+var ErrUnavailable = errors.New("guitest: headless screenshot unavailable")
+
+FUNCTIONS
+
+func Difference(a, b image.Image, tolerance uint8) (float64, error)
+    Difference returns the fraction of pixels with any RGBA channel difference
+    above tolerance. Geometry mismatches are errors, not scaled comparisons.
+
+func OnFailure(t FailureReporter, d *guitest.Driver, base string, options guitest.DumpOptions)
+    OnFailure registers artifact capture. Register it after Driver.Close cleanup
+    so Go's last-in-first-out cleanup captures the frame before closing the UI.
+
+func Save(d *guitest.Driver, base string, options guitest.DumpOptions) error
+    Save pairs a redacted JSON dump with an optional PNG. On an unavailable GPU,
+    JSON is preserved and ErrUnavailable is returned. base is a path without an
+    extension; callers own its directory and artifact lifecycle.
+
+func WritePNG(d *guitest.Driver, writer io.Writer) error
+    WritePNG renders the last frame. Pixels are not redacted: use synthetic
+    data.
+
+
+TYPES
+
+type FailureReporter interface {
+	Cleanup(func())
+	Failed() bool
+	Logf(string, ...any)
+}
+

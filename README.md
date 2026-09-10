@@ -24,7 +24,8 @@ import (
 
 The current Gio baseline is `gioui.org v0.10.2`.
 
-The window-free testing framework is being implemented for local Termux use.
+The window-free testing framework supports routed input, semantic selectors,
+bounded JSON diagnostics, component snapshots, and optional headless PNGs.
 See the [developer/LLM guide](docs/guitest.md) and
 [delivery progress](test-framework-progress.md) for available APIs and pending
 device gates.
@@ -200,7 +201,7 @@ The script uses the existing pinned NDK's Vulkan/EGL headers and Android
 libraries with command-local compiler settings; no global configuration or
 toolchain upgrade is needed. Some NDK/compiler warnings remain. Focused checks
 such as `go test ./router ./grid ./grid/sqlite ./form` still work independently.
-Run the separate [framework checks](docs/guitest.md#run-on-this-phone) for
+Run the separate [framework checks](docs/guitest.md#termux-commands) for
 GPU-isolation checks and the tagged demo tests. None replaces manual APK testing.
 
 ## Android demo

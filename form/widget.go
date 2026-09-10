@@ -3,10 +3,12 @@ package form
 import (
 	"context"
 	"image/color"
+	"strings"
 	"time"
 
 	"gioui.org/gesture"
 	"gioui.org/io/pointer"
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -14,6 +16,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/VinceLewis/gio-kit/accessibility"
 )
 
 // Widget renders every visible field from the schema. Retain it across frames.
@@ -117,7 +120,22 @@ func (w *Widget) layoutField(gtx layout.Context, theme *material.Theme, field Fi
 				return layout.Inset{Bottom: unit.Dp(4)}.Layout(gtx, title.Layout)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return w.input(gtx, theme, field, index)
+				var help []string
+				if field.Mandatory {
+					help = append(help, "Required")
+				}
+				if field.ReadOnly {
+					help = append(help, "Read only")
+				}
+				if field.Error != "" {
+					help = append(help, field.Error)
+				}
+				if field.Schema.UnavailableReason != "" {
+					help = append(help, field.Schema.UnavailableReason)
+				}
+				return (accessibility.Group{Label: field.Schema.Label, Description: strings.Join(help, ". "), Disabled: field.ReadOnly}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return w.input(gtx, theme, field, index)
+				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				if !isTextField(field.Schema.Type) || w.textMenu != field.Schema.ID || field.ReadOnly {
@@ -131,7 +149,9 @@ func (w *Widget) layoutField(gtx layout.Context, theme *material.Theme, field Fi
 				}
 				errLabel := material.Caption(theme, field.Error)
 				errLabel.Color = color.NRGBA{R: 183, G: 48, B: 62, A: 255}
-				return layout.Inset{Top: unit.Dp(3)}.Layout(gtx, errLabel.Layout)
+				return (accessibility.Group{Label: field.Schema.Label + " error"}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: unit.Dp(3)}.Layout(gtx, errLabel.Layout)
+				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				if field.Schema.UnavailableReason == "" || field.Schema.Type == FieldAttachment && w.OnAttachment != nil {
@@ -144,6 +164,9 @@ func (w *Widget) layoutField(gtx layout.Context, theme *material.Theme, field Fi
 }
 
 func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldState, index int) layout.Dimensions {
+	if field.ReadOnly && !isTextField(field.Schema.Type) {
+		gtx = gtx.Disabled()
+	}
 	switch field.Schema.Type {
 	case FieldBoolean:
 		check := w.check(field)
@@ -158,7 +181,7 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 			gtx = gtx.Disabled()
 		}
 		return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
-			return material.CheckBox(theme, check, "Active").Layout(gtx)
+			return material.CheckBox(theme, check, field.Schema.Label).Layout(gtx)
 		})
 	case FieldChoice:
 		button := w.button(field.Schema.ID)
@@ -187,6 +210,9 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
 					return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						semantic.Button.Add(gtx.Ops)
+						semantic.LabelOp(field.Schema.Label).Add(gtx.Ops)
+						semantic.DescriptionOp(name).Add(gtx.Ops)
 						return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 							layout.Flexed(1, material.Body1(theme, name).Layout),
 							layout.Rigid(material.Body1(theme, "v").Layout),
@@ -202,6 +228,9 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 			}),
 		)
 	case FieldReference:
+		if w.OnReference == nil {
+			gtx = gtx.Disabled()
+		}
 		button := w.button(field.Schema.ID)
 		if button.Clicked(gtx) && !field.ReadOnly && w.OnReference != nil {
 			w.OnReference(field.Schema)
@@ -215,6 +244,9 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 		}
 		return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
 			return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.Button.Add(gtx.Ops)
+				semantic.LabelOp(field.Schema.Label).Add(gtx.Ops)
+				semantic.DescriptionOp(name).Add(gtx.Ops)
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 					layout.Flexed(1, material.Body1(theme, name).Layout),
 					layout.Rigid(material.Caption(theme, "LOOK UP").Layout),
@@ -240,6 +272,9 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 		}
 		return w.outline(gtx, field, func(gtx layout.Context) layout.Dimensions {
 			return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.Button.Add(gtx.Ops)
+				semantic.LabelOp(field.Schema.Label).Add(gtx.Ops)
+				semantic.DescriptionOp(name).Add(gtx.Ops)
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 					layout.Flexed(1, material.Body1(theme, name).Layout),
 					layout.Rigid(material.Caption(theme, action).Layout),
@@ -342,6 +377,9 @@ func (w *Widget) choiceMenu(gtx layout.Context, theme *material.Theme, field Fie
 				label = "✓  " + label
 			}
 			return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.RadioButton.Add(gtx.Ops)
+				semantic.LabelOp(choice.Label).Add(gtx.Ops)
+				semantic.SelectedOp(choice.Value == field.Value).Add(gtx.Ops)
 				return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(12), Right: unit.Dp(12)}.Layout(gtx, material.Body1(theme, label).Layout)
 			})
 		})
@@ -491,6 +529,7 @@ func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *
 		}
 		if disabled {
 			button.Background = color.NRGBA{R: 150, G: 157, B: 168, A: 255}
+			gtx = gtx.Disabled()
 		}
 		return button.Layout(gtx)
 	}

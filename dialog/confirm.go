@@ -2,11 +2,11 @@
 package dialog
 
 import (
-	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/VinceLewis/gio-kit/accessibility"
 )
 
 type Confirm struct {
@@ -17,7 +17,6 @@ type Confirm struct {
 }
 
 func (d *Confirm) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
-	semantic.LabelOp(d.Title + ". " + d.Message).Add(gtx.Ops)
 	if d.confirm.Clicked(gtx) && d.OnConfirm != nil {
 		d.OnConfirm()
 	}
@@ -31,24 +30,26 @@ func (d *Confirm) Layout(gtx layout.Context, theme *material.Theme) layout.Dimen
 	if cancel == "" {
 		cancel = "CANCEL"
 	}
-	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		if gtx.Constraints.Max.X > gtx.Dp(unit.Dp(420)) {
-			gtx.Constraints.Max.X = gtx.Dp(unit.Dp(420))
-		}
-		return layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				layout.Rigid(material.H6(theme, d.Title).Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(18)}.Layout(gtx, material.Body1(theme, d.Message).Layout)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-						layout.Flexed(1, material.Button(theme, &d.cancel, cancel).Layout),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(8)}.Layout(gtx) }),
-						layout.Flexed(1, material.Button(theme, &d.confirm, confirm).Layout),
-					)
-				}),
-			)
+	return (accessibility.Group{Label: d.Title, Description: d.Message}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			if gtx.Constraints.Max.X > gtx.Dp(unit.Dp(420)) {
+				gtx.Constraints.Max.X = gtx.Dp(unit.Dp(420))
+			}
+			return layout.UniformInset(unit.Dp(24)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(material.H6(theme, d.Title).Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(18)}.Layout(gtx, material.Body1(theme, d.Message).Layout)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, material.Button(theme, &d.cancel, cancel).Layout),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(8)}.Layout(gtx) }),
+							layout.Flexed(1, material.Button(theme, &d.confirm, confirm).Layout),
+						)
+					}),
+				)
+			})
 		})
 	})
 }

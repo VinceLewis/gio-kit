@@ -2,10 +2,13 @@
 package picker
 
 import (
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/VinceLewis/gio-kit/accessibility"
+	"strings"
 )
 
 type Option struct {
@@ -52,7 +55,9 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, material.Editor(theme, &w.search, "Search").Layout),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return (accessibility.Group{Label: "Search records"}).Layout(gtx, material.Editor(theme, &w.search, "Search").Layout)
+					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, material.Button(theme, &w.submit, "SEARCH").Layout)
 					}),
@@ -88,6 +93,9 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 				}
 				return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						semantic.Button.Add(gtx.Ops)
+						semantic.LabelOp(option.Label).Add(gtx.Ops)
+						semantic.DescriptionOp(strings.TrimSpace(option.Secondary + ". " + option.DisabledReason)).Add(gtx.Ops)
 						gtx.Constraints.Min.Y = gtx.Dp(unit.Dp(48))
 						return layout.Flex{Axis: layout.Vertical}.Layout(gtx, layout.Rigid(material.Body1(theme, option.Label).Layout), layout.Rigid(material.Caption(theme, option.Secondary).Layout))
 					})

@@ -351,6 +351,12 @@ func (u *demoUI) Close() error {
 		demo.form.Close()
 	}
 	u.work.stop()
+	for _, demo := range u.formDemos {
+		demo.form.Wait()
+	}
+	if u.lookup != nil && u.lookup.ctrl != nil {
+		u.lookup.ctrl.Wait()
+	}
 	if u.gridDemo != nil {
 		u.gridDemo.Close()
 	}

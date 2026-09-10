@@ -313,6 +313,7 @@ func (d *gridDemo) Close() {
 	}
 	if d.controller != nil {
 		d.controller.Close()
+		d.controller.Wait()
 	}
 	if d.db != nil {
 		_ = d.db.Close()

@@ -14,6 +14,7 @@ import (
 	"gioui.org/io/semantic"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"github.com/VinceLewis/gio-kit/diagnostic"
 	"github.com/VinceLewis/gio-kit/grid"
 	"github.com/VinceLewis/gio-kit/guitest"
 )
@@ -35,7 +36,22 @@ func testDemo(t *testing.T, dataDir string) (*guitest.Driver, *demoUI) {
 			return guitest.Harness{}, err
 		}
 		ui.theme.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
-		return guitest.Harness{Layout: ui.Layout, Idle: ui.Idle, Close: ui.Close}, nil
+		return guitest.Harness{Layout: ui.Layout, Idle: ui.Idle, Close: ui.Close, Providers: map[string]diagnostic.Provider{
+			"router": ui.router,
+			"grid": diagnostic.ProviderFunc(func(request diagnostic.Request) diagnostic.Component {
+				if ui.gridDemo.widget == nil {
+					return diagnostic.Component{Kind: "grid", State: map[string]any{"loading": true}}
+				}
+				return ui.gridDemo.widget.DebugSnapshot(request)
+			}),
+			"form": diagnostic.ProviderFunc(func(request diagnostic.Request) diagnostic.Component {
+				id := ui.router.Current().Route.Params["id"].String()
+				if form := ui.formDemos[id]; form != nil {
+					return form.widget.DebugSnapshot(request)
+				}
+				return diagnostic.Component{Kind: "form", State: map[string]any{"available": false}}
+			}),
+		}}, nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,22 +111,7 @@ func TestHarness_NavigationModalGuardAndResize(t *testing.T) {
 	if route := ui.router.Current().Route; route.Name != "incident.form" || route.Params["id"].String() != "sys_id_123" {
 		t.Fatalf("deep link = %v", route)
 	}
-	// Until the semantics milestone associates labels with editors, use the
-	// second laid-out editor (short description, after read-only Number).
-	editIndex, count := -1, 0
-	for _, node := range d.Nodes() {
-		if node.Desc.Class == semantic.Editor {
-			count++
-			if count == 2 {
-				editIndex = node.Index
-				break
-			}
-		}
-	}
-	if editIndex < 0 {
-		t.Fatal("short-description editor was not laid out")
-	}
-	if err := d.Type(func(node guitest.Node) bool { return node.Index == editIndex }, " modified"); err != nil {
+	if err := d.Type(guitest.All(guitest.Role(semantic.Editor), guitest.Name("Short description")), " modified"); err != nil {
 		t.Fatalf("%v; nodes=%+v", err, d.Nodes())
 	}
 	if !ui.formDemos["sys_id_123"].form.IsDirty() {

@@ -36,11 +36,13 @@ type Reference struct {
 type Validator func(value string) (ok bool, message string)
 
 type FieldSchema struct {
-	ID                string
-	Label             string
-	Type              FieldType
-	Mandatory         bool
-	ReadOnly          bool
+	ID        string
+	Label     string
+	Type      FieldType
+	Mandatory bool
+	ReadOnly  bool
+	// Sensitive redacts this field and its control descendants in diagnostics.
+	Sensitive         bool
 	DefaultValue      string
 	Choices           []Choice
 	RefTable          string

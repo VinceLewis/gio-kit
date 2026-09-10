@@ -3,6 +3,7 @@ package grid
 import (
 	"image/color"
 
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/text"
 	"gioui.org/unit"
@@ -32,13 +33,18 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, row Row, c
 				w.Controller.ToggleSelection(row.ID)
 			}
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, check, "").Layout)
+				return selectionControl(gtx, theme, check, "Select "+w.rowName(row, columns))
 			}))
 		}
 		for _, column := range columns {
 			column := column
 			children = append(children, columnChild(column, func(gtx layout.Context) layout.Dimensions {
 				cell := func(gtx layout.Context) layout.Dimensions {
+					if column.ID == openColumn {
+						semantic.Button.Add(gtx.Ops)
+						semantic.LabelOp("Open " + w.rowName(row, columns)).Add(gtx.Ops)
+						semantic.SelectedOp(selected).Add(gtx.Ops)
+					}
 					label := material.Body2(theme, row.Cells[column.ID])
 					label.MaxLines = 2
 					if column.ID == openColumn {

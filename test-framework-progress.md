@@ -6,38 +6,75 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 - Started: 2026-09-09. User confirmed GPT-6 Astra / max and authorized commit,
   push, and execution of the plan.
-- Status: **awaiting user device acceptance** of the foundation APK. Build,
-  signing, signature, native dependency, and Downloads-copy checks passed.
+- Status: **final verification and consumer dependency pin**. On
+  2026-09-10 the user reported installing and testing the latest APK: all well.
 - Termux follow-up: full default-package tests and vet now pass through
   `./tools/test-termux.sh -count=1`. This does not advance the device gate.
-- Resume here: obtain the user's result for the checklist below. After
-  acceptance, continue the step-4 component semantics audit and remaining step-5
-  actions, including replacing the demo test's positional field selector with
-  an accessible/stable target. Do not repeat the completed feasibility proof.
-- Device gates remain mandatory. Stop after packaging material UI changes for
-  the user to install, launch, and test; do not advance through a pending gate.
+- Resume here: finish final checks, publish/pin the consumer dependency, then
+  build the combined device gate. Do not repeat completed feasibility checks.
+- 2026-09-10 user steering: finish all required coding and automated checks
+  before building APKs, then perform one combined user device test. This
+  supersedes the intermediate packaging pauses for this framework work.
+  Installation and launch remain manual; device acceptance is still required.
+- Later 2026-09-10 steering explicitly authorizes installation through wireless
+  ADB. Launch and visual acceptance remain user steps. ADB is installed, but
+  discovery returned `unknown host service 'mdns:services'`; pairing details
+  are pending from the user. Framework tests remain independent of ADB.
 
 ## Delivery checklist
 
 | Step | Deliverable | Status |
 | --- | --- | --- |
 | 1 | Termux input.Router pointer/editor/semantics proof | Complete |
-| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | Awaiting device test |
-| 3 | Deterministic core frame driver | Automated checks passed |
-| 4 | Reusable component semantics audit and improvements | Pending |
-| 5 | Selectors and interaction actions | In progress: tap/type/key/back/resize |
-| 6 | Versioned JSON dumps, JSON Schema, safe limits | Pending |
-| 7 | Component snapshot providers | Pending |
-| 8 | Tested human/LLM guide and adl-gio consumer pilot | Foundation guide added; complete reference/schema and pilot pending |
-| 9 | Separately built optional screenshots | Pending |
-| 10 | N*, G*, and form acceptance scenarios | Navigation integration coverage added; remaining scenarios pending |
-| 11 | Evaluate manually launched device control bridge | Pending |
+| 2 | Layout, invalidation, time, idle, cleanup contract; demo root | Complete |
+| 3 | Deterministic core frame driver | Complete |
+| 4 | Reusable component semantics audit and improvements | Automated checks passed; combined device gate pending |
+| 5 | Selectors and interaction actions | Complete |
+| 6 | Versioned JSON dumps, JSON Schema, safe limits | Complete |
+| 7 | Component snapshot providers | Complete |
+| 8 | Tested human/LLM guide and adl-gio consumer pilot | Automated checks passed; published dependency pin pending |
+| 9 | Separately built optional screenshots | Complete; headless pixel readback passed on this host |
+| 10 | N*, G*, and form acceptance scenarios | Automated checks passed; combined device gate pending |
+| 11 | Evaluate manually launched device control bridge | Complete evaluation; implementation deferred pending device transport/security spike |
 
 Status values: Pending, In progress, Automated checks passed, Awaiting device
 test, Complete, or Deferred with an explicit reason. A host check or signed APK
 does not constitute device acceptance.
 
-## Verification and decisions
+## Completion verification (2026-09-10)
+
+- Implemented measured accessibility groups and audited form, grid, shell,
+  picker, dialog and presentation semantics. Removed positional demo targeting.
+  Invalid/submitting form action buttons now disable real input as well as
+  appearing disabled; this was exposed by the new real-input tests.
+- Added scoped/name/state/occurrence selectors, test-only ID bindings, managed
+  pointer phases, double tap, long press, drag and wheel scroll. Tests exercise
+  touch arbitration and 10,000-item virtualization without graphics imports.
+- Added bounded redacted schema-v1 captures, schema validation, snapshot
+  providers for all seven component kinds, local artifact CLI and generated
+  human/LLM references. Unknown clip/coverage/focus facts remain explicit.
+- Added optional tagged headless rendering, JSON/PNG artifact pairing,
+  screenshot-on-failure, and tolerant image comparison. The real tagged probe
+  rendered/read the expected red pixel on this Termux host; PNGs are unredacted.
+- Extended routed acceptance coverage for grid selection/sort/retry/empty,
+  stale completion, form validation/submission/retry, and composed widgets.
+  See [coverage matrix](docs/guitest-acceptance.md).
+- ADL pilot extracts its existing root behind storage, clock, invalidation,
+  provider and cleanup hooks. Tests route add/edit/guarded Back and reconstruct
+  state from a temporary database/session; a virtual worker proves joined
+  cancellation. No ADL policy enters gio-kit. Default and Android-tagged ADL
+  tests/vet passed with the temporary workspace; published-pin checks follow.
+- Core checks (including CGO disabled), demo checks, full Termux tests/vet,
+  generated-reference checks and the isolated GPU test passed. Final
+  controller cleanup and the consumer pilot also passed before publication.
+- ADB paired successfully using the user-provided screenshot. It still needs
+  the main Wireless debugging connection port; no APK is installed yet.
+  Pairing codes/screenshots are outside the repositories and are not committed.
+- Bridge evaluation completed in [the decision note](docs/guitest-bridge.md).
+  Implementation is deferred until a manual debug transport/security spike;
+  release builds contain no control bridge.
+
+## Foundation verification and decisions (historical)
 
 - Baseline `gio-kit`: `481a224`, branch `main`, tracking `origin/main`; only the
   untracked framework plan existed before execution.
@@ -117,7 +154,7 @@ does not constitute device acceptance.
   `libEGL.so` and exclude desktop `libEGL.so.1`.
 - SHA-256 of both build output and Downloads copy:
   `a40072ba00758c3cccb2a164f27235d8f08eaa6aa932846ddbb3a8d19290adea`.
-- Installation, launch, and device behavior: **not tested; user gate pending**.
+- Installation, launch, and device behavior: **accepted by user 2026-09-10**.
 
 Install and launch manually, then check:
 
@@ -137,7 +174,7 @@ Install and launch manually, then check:
    choice/reference controls, and the simulated fetch failure/retry. Test form
    input and the `server-error` submission scenario, then correct and retry.
 
-Record the user's results here before advancing the implementation.
+User result (2026-09-10): installed and tested the latest version; all is well.
 
 ## Checkpoint history
 

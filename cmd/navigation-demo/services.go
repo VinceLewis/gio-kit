@@ -142,14 +142,14 @@ func (u *demoUI) Idle() bool {
 	if u.gridDemo.controller == nil && u.gridDemo.setupErr == nil {
 		return false
 	}
-	if c := u.gridDemo.controller; c != nil && c.Snapshot().State == grid.Loading {
+	if c := u.gridDemo.controller; c != nil && (c.Pending() || c.Snapshot().State == grid.Loading) {
 		return false
 	}
-	if u.lookup != nil && u.lookup.ctrl.Snapshot().State == grid.Loading {
+	if u.lookup != nil && (u.lookup.ctrl.Pending() || u.lookup.ctrl.Snapshot().State == grid.Loading) {
 		return false
 	}
 	for _, f := range u.formDemos {
-		if f.form.Snapshot().Submitting || len(f.saved) != 0 {
+		if f.form.Pending() || len(f.saved) != 0 {
 			return false
 		}
 	}

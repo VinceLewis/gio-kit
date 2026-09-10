@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"time"
 
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -223,7 +224,7 @@ func (w *Widget) layoutHeader(gtx layout.Context, theme *material.Theme, snapsho
 			w.Controller.SetRowsSelected(rowIDs, w.selectAll.Value)
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, &w.selectAll, "").Layout)
+			return selectionControl(gtx, theme, &w.selectAll, "Select loaded rows")
 		}))
 	}
 	for _, column := range columns {
@@ -234,7 +235,13 @@ func (w *Widget) layoutHeader(gtx layout.Context, theme *material.Theme, snapsho
 				_ = w.Controller.ToggleSort(column.ID, w.AdditiveSort)
 			}
 			label := column.Header + sortSuffix(snapshot.Sort, column.ID)
+			if !column.Sortable {
+				gtx = gtx.Disabled()
+			}
 			return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.Button.Add(gtx.Ops)
+				semantic.LabelOp("Sort by " + column.Header).Add(gtx.Ops)
+				semantic.DescriptionOp(sortSuffix(snapshot.Sort, column.ID)).Add(gtx.Ops)
 				textStyle := material.Caption(theme, label)
 				textStyle.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
 				textStyle.Alignment = text.Start

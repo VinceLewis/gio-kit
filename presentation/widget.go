@@ -14,6 +14,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/VinceLewis/gio-kit/accessibility"
 )
 
 // Widget retains interaction and scroll state across immediate-mode frames.
@@ -137,7 +138,12 @@ func (w *Widget) layoutSelect(gtx layout.Context, theme *material.Theme, control
 		if option.Value == current {
 			label = "✓ " + label
 		}
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions { return material.Button(theme, button, label).Layout(gtx) }))
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return (accessibility.Group{Label: control.Label + ": " + option.Label, Selected: option.Value == current}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.SelectedOp(option.Value == current).Add(gtx.Ops)
+				return material.Button(theme, button, label).Layout(gtx)
+			})
+		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 }
@@ -175,16 +181,17 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, owner stri
 		}
 		label = strings.TrimSpace(strings.Join(pieces, " "))
 	}
-	semantic.LabelOp(label).Add(gtx.Ops)
-	return layout.Inset{Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return surface(gtx, statusColor(row.Status, theme.Bg), func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutFragments(gtx, theme, row.Fragments) }),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return w.layoutActions(gtx, theme, row.Actions, row.ID, "")
-					}),
-				)
+	return (accessibility.Group{Label: label}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return surface(gtx, statusColor(row.Status, theme.Bg), func(gtx layout.Context) layout.Dimensions {
+				return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutFragments(gtx, theme, row.Fragments) }),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return w.layoutActions(gtx, theme, row.Actions, row.ID, "")
+						}),
+					)
+				})
 			})
 		})
 	})
@@ -299,8 +306,13 @@ func (w *Widget) layoutMatrix(gtx layout.Context, theme *material.Theme, matrix 
 					if !matrix.Editable || !cell.Enabled {
 						gtx = gtx.Disabled()
 					}
-					semantic.LabelOp(cell.AccessibleLabel).Add(gtx.Ops)
-					return layout.Inset{Right: unit.Dp(4)}.Layout(gtx, material.Button(theme, button, cell.Text).Layout)
+					name := cell.AccessibleLabel
+					if name == "" {
+						name = row.Label + ": " + cell.Column
+					}
+					return (accessibility.Group{Label: name, Description: matrix.DisabledReason, Disabled: !matrix.Editable || !cell.Enabled}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Right: unit.Dp(4)}.Layout(gtx, material.Button(theme, button, cell.Text).Layout)
+					})
 				}))
 			}
 			return layout.Flex{Alignment: layout.Middle}.Layout(gtx, cells...)
@@ -317,8 +329,7 @@ func (w *Widget) layoutLegends(gtx layout.Context, theme *material.Theme) layout
 		for _, item := range legend.Items {
 			item := item
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				semantic.LabelOp(item.AccessibleLabel).Add(gtx.Ops)
-				return material.Caption(theme, "● "+item.Label).Layout(gtx)
+				return (accessibility.Group{Label: item.AccessibleLabel}).Layout(gtx, material.Caption(theme, "● "+item.Label).Layout)
 			}))
 		}
 	}

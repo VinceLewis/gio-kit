@@ -11,11 +11,13 @@ import (
 
 	"gioui.org/io/event"
 	"gioui.org/io/input"
+	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/unit"
+	"github.com/VinceLewis/gio-kit/diagnostic"
 )
 
 var (
@@ -41,6 +43,8 @@ type Harness struct {
 	Layout LayoutFunc
 	Idle   func() bool
 	Close  func() error
+	// Providers are queried on the frame goroutine during diagnostic capture.
+	Providers map[string]diagnostic.Provider
 }
 
 type Option func(*config)
@@ -52,6 +56,7 @@ type config struct {
 	epoch     time.Time
 	maxFrames int
 	interval  time.Duration
+	bindings  []idBinding
 }
 
 // Size sets physical pixels. Metrics determines the dp/sp conversion.
@@ -60,6 +65,18 @@ func Metrics(metric unit.Metric) Option  { return func(c *config) { c.metric = m
 func Locale(locale system.Locale) Option { return func(c *config) { c.locale = locale } }
 func StartTime(epoch time.Time) Option   { return func(c *config) { c.epoch = epoch } }
 func MaxFrames(limit int) Option         { return func(c *config) { c.maxFrames = limit } }
+
+type idBinding struct {
+	id       string
+	selector Selector
+}
+
+// BindID annotates matching nodes in driver diagnostics only. Bindings are
+// re-evaluated each frame and may use labels, roles and ancestry, but not ID.
+// Ambiguous bindings remain ambiguous; Find and actions reject them.
+func BindID(id string, selector Selector) Option {
+	return func(c *config) { c.bindings = append(c.bindings, idBinding{id, selector}) }
+}
 
 // Driver owns Gio input routing and operations. All methods except Invalidate
 // and Clock's read/wait methods must be called on one goroutine. A layout must
@@ -78,6 +95,7 @@ type Driver struct {
 	wakeupAt time.Time
 	wakeup   bool
 	nodes    []Node
+	pressed  *pointer.Event
 }
 
 func New(root LayoutFunc, options ...Option) (*Driver, error) {
@@ -97,6 +115,13 @@ func NewApp(create func(Environment) (Harness, error), options ...Option) (*Driv
 	}
 	if c.size.X <= 0 || c.size.Y <= 0 || !validMetric(c.metric) || c.maxFrames <= 0 || create == nil {
 		return nil, errors.New("guitest: invalid configuration")
+	}
+	seenIDs := make(map[string]bool)
+	for _, binding := range c.bindings {
+		if binding.id == "" || binding.selector == nil || seenIDs[binding.id] {
+			return nil, errors.New("guitest: invalid or duplicate ID binding")
+		}
+		seenIDs[binding.id] = true
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &Driver{config: c, cancel: cancel, wake: make(chan struct{}, 1)}
@@ -126,6 +151,19 @@ func validMetric(metric unit.Metric) bool {
 
 func (d *Driver) Clock() *Clock       { return d.clock }
 func (d *Driver) FrameNumber() uint64 { return d.frame }
+
+// Render supplies the current operation list to an optional renderer without
+// importing a graphics backend. The callback must not retain or mutate Ops,
+// block indefinitely, or call Driver methods. Render does not advance a frame.
+func (d *Driver) Render(render func(*op.Ops, image.Point) error) error {
+	if d.closed.Load() {
+		return ErrClosed
+	}
+	if render == nil {
+		return errors.New("guitest: nil renderer")
+	}
+	return render(&d.ops, d.config.size)
+}
 
 // Invalidate coalesces asynchronous wakeups. It is safe after Close.
 func (d *Driver) Invalidate() {

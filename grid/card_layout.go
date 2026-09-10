@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 
+	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/text"
 	"gioui.org/unit"
@@ -61,7 +62,7 @@ func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, sna
 			w.Controller.SetRowsSelected(rowIDs, w.selectAll.Value)
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, &w.selectAll, "").Layout)
+			return selectionControl(gtx, theme, &w.selectAll, "Select loaded rows")
 		}))
 	}
 	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -80,6 +81,9 @@ func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, sna
 				_ = w.Controller.ToggleSort(column.ID, w.AdditiveSort)
 			}
 			return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.Button.Add(gtx.Ops)
+				semantic.LabelOp("Sort by " + column.Header).Add(gtx.Ops)
+				semantic.DescriptionOp(sortSuffix(snapshot.Sort, column.ID)).Add(gtx.Ops)
 				label := material.Caption(theme, column.Header+sortSuffix(snapshot.Sort, column.ID))
 				label.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
 				label.Alignment = text.Start
@@ -166,10 +170,13 @@ func (w *Widget) layoutCard(gtx layout.Context, theme *material.Theme, row Row, 
 					if !w.EnableSelection {
 						return layout.Dimensions{}
 					}
-					return fixedCell(gtx, selectionColumnWidth, material.CheckBox(theme, check, "").Layout)
+					return selectionControl(gtx, theme, check, "Select "+w.rowName(row, columns))
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return rowClick.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						semantic.Button.Add(gtx.Ops)
+						semantic.LabelOp("Open " + w.rowName(row, columns)).Add(gtx.Ops)
+						semantic.SelectedOp(selected).Add(gtx.Ops)
 						return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							items := []layout.FlexChild{layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								label := material.Body1(theme, row.Cells[titleID])

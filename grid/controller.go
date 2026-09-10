@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"gioui.org/unit"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,6 +21,8 @@ type preferences struct {
 // Controller owns query, paging, selection, and personalization state. It is
 // safe for frame-loop and background use; Fetch always runs asynchronously.
 type Controller struct {
+	active     atomic.Int64
+	workers    sync.WaitGroup
 	mu         sync.RWMutex
 	source     DataSource
 	columns    []Column
@@ -314,8 +317,26 @@ func (c *Controller) startFetchLocked(offset int) {
 	generation := c.generation
 	sort := append([]SortSpec(nil), c.sort...)
 	filters := cloneFilters(c.filters)
-	go c.fetch(ctx, generation, offset, sort, filters)
+	c.workers.Add(1)
+	c.active.Add(1)
+	go func() {
+		defer func() {
+			c.active.Add(-1)
+			if c.notify != nil {
+				c.notify()
+			}
+			c.workers.Done()
+		}()
+		c.fetch(ctx, generation, offset, sort, filters)
+	}()
 }
+
+// Wait joins fetches after Close. Call during teardown, outside layout and
+// data-source callbacks. Sources must honor cancellation for bounded shutdown.
+func (c *Controller) Wait() { c.workers.Wait() }
+
+// Pending includes canceled requests and completion notification callbacks.
+func (c *Controller) Pending() bool { return c.active.Load() != 0 }
 
 func (c *Controller) fetch(ctx context.Context, generation uint64, offset int, sort []SortSpec, filters map[string]Filter) {
 	rows, total, err := c.source.Fetch(ctx, offset, c.pageSize, sort, filters)
