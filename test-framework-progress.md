@@ -6,20 +6,22 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 - Started: 2026-09-09. User confirmed GPT-6 Astra / max and authorized commit,
   push, and execution of the plan.
-- Status: **final verification and consumer dependency pin**. On
+- Status: **coding and automated verification complete; device acceptance pending**. On
   2026-09-10 the user reported installing and testing the latest APK: all well.
 - Termux follow-up: full default-package tests and vet now pass through
   `./tools/test-termux.sh -count=1`. This does not advance the device gate.
-- Resume here: finish final checks, publish/pin the consumer dependency, then
-  build the combined device gate. Do not repeat completed feasibility checks.
+- Resume here: collect the combined device results below. Both APKs are
+  installed through user-authorized ADB. Do not repeat completed
+  feasibility checks or advance device acceptance without user results.
 - 2026-09-10 user steering: finish all required coding and automated checks
   before building APKs, then perform one combined user device test. This
   supersedes the intermediate packaging pauses for this framework work.
-  Installation and launch remain manual; device acceptance is still required.
+  Device acceptance is still required; later steering permits ADB installation.
 - Later 2026-09-10 steering explicitly authorizes installation through wireless
-  ADB. Launch and visual acceptance remain user steps. ADB is installed, but
-  discovery returned `unknown host service 'mdns:services'`; pairing details
-  are pending from the user. Framework tests remain independent of ADB.
+  ADB. Launch and visual acceptance remain user steps. Pairing and connection
+  succeeded using screenshots from Android's `Pictures/Screenshots` folder;
+  both verified APKs installed successfully. Framework tests remain independent
+  of ADB. No app was automatically launched.
 
 ## Delivery checklist
 
@@ -32,7 +34,7 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 | 5 | Selectors and interaction actions | Complete |
 | 6 | Versioned JSON dumps, JSON Schema, safe limits | Complete |
 | 7 | Component snapshot providers | Complete |
-| 8 | Tested human/LLM guide and adl-gio consumer pilot | Automated checks passed; published dependency pin pending |
+| 8 | Tested human/LLM guide and adl-gio consumer pilot | Complete; published dependency verified with local overrides disabled |
 | 9 | Separately built optional screenshots | Complete; headless pixel readback passed on this host |
 | 10 | N*, G*, and form acceptance scenarios | Automated checks passed; combined device gate pending |
 | 11 | Evaluate manually launched device control bridge | Complete evaluation; implementation deferred pending device transport/security spike |
@@ -63,12 +65,16 @@ does not constitute device acceptance.
   provider and cleanup hooks. Tests route add/edit/guarded Back and reconstruct
   state from a temporary database/session; a virtual worker proves joined
   cancellation. No ADL policy enters gio-kit. Default and Android-tagged ADL
-  tests/vet passed with the temporary workspace; published-pin checks follow.
+  tests/vet passed with the temporary workspace and the published dependency,
+  with `GOWORK=off`, no replacement, and successful module verification.
 - Core checks (including CGO disabled), demo checks, full Termux tests/vet,
   generated-reference checks and the isolated GPU test passed. Final
   controller cleanup and the consumer pilot also passed before publication.
-- ADB paired successfully using the user-provided screenshot. It still needs
-  the main Wireless debugging connection port; no APK is installed yet.
+- Screenshot artifact failure now removes stale PNGs before writing a new tree
+  and removes partial images. Core tests/vet and the real tagged GPU probe pass
+  after this final helper fix.
+- ADB paired and connected successfully using the user-provided screenshots;
+  both APK installations succeeded. Launch and visual acceptance remain pending.
   Pairing codes/screenshots are outside the repositories and are not committed.
 - Bridge evaluation completed in [the decision note](docs/guitest-bridge.md).
   Implementation is deferred until a manual debug transport/security spike;
@@ -143,7 +149,47 @@ does not constitute device acceptance.
   Concurrent lifecycle tests remain required; they do not replace race testing
   on a supported host or device acceptance here.
 
-## Device acceptance
+## Combined device acceptance (pending)
+
+- Gio Kit: `/storage/emulated/0/Download/gio-kit-form-phase3-release.apk`,
+  `app.giokit.cruddemo`, version `0.3.1.10`, code `10`.
+- ADL pilot: `/storage/emulated/0/Download/adl-client-foundation-arm64.apk`,
+  `app.adl.client`, version `0.1.0.2`, code `2`.
+- Both build/sign/Downloads-copy pipelines passed. Signatures use the existing
+  local debug key with v2/v3 verification. Both target only arm64 and Android
+  EGL. The installed copies match these SHA-256 hashes:
+  - Gio Kit: `1253136d0ebcd857320e2115238b0ebddc625c11fd4bcc10225d5653de442363`.
+  - ADL pilot: `11a90b92984ee57cdf040c514672526d50e26e71a25823839b4c0b84c3271d57`.
+- APK framework source: `f9ddc8da792e`, published before the ADL dependency pin
+  `v0.0.0-20260910000804-f9ddc8da792e`. The subsequent screenshot artifact helper
+  fix does not enter either application's production dependency graph.
+- Both APKs installed successfully through user-authorized ADB. Manual launch
+  and visual acceptance are pending; installation does not pass this gate.
+
+Launch both installed APKs, then check:
+
+1. Gio Kit: edit Short description; confirm invalid/busy Save buttons reject
+   input. Trigger required validation and the `server-error` submission,
+   correct/retry, and check Save / Save & Close. Test keyboard Unicode input,
+   long-press COPY/PASTE, choices, references and disabled attachment controls.
+2. Gio Kit: select rows without opening them, open a key cell, sort/filter,
+   scroll the 10,000-row grid in cards and table modes, and exercise fetch
+   failure/RETRY/empty states. Return with Android Back and check retained state.
+3. Both apps: navigate, open forms/dialogs, edit and use Android Back to test
+   STAY/DISCARD. Check touch targets and accessible labels (TalkBack if used),
+   including repeated actions in composed views and unavailable controls.
+4. Both apps: rotate or resize where supported with a list, edited form or
+   dialog open. Check software keyboard, scrolling and redraws. Background,
+   manually stop, and relaunch to verify restoration. Gio Kit preserves routes;
+   its serializer does not promise persistence of unsaved field values.
+5. ADL: exercise normal list/form/presentation/reference flows and rapid
+   navigation while loading, then relaunch. Check that late results do not
+   reopen old screens or lose the current session/theme/navigation state.
+
+Host semantic/GPU tests do not replace these Android checks. The live bridge
+is deferred as evaluated in docs/guitest-bridge.md; no control server is shipped.
+
+## Foundation device acceptance (accepted)
 
 - Source checkpoint: `17e41f2` (pushed to `origin/main`).
 - Build: `./tools/build-form-apk.sh` passed using the pinned Termux pipeline.

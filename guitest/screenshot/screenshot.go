@@ -3,6 +3,7 @@
 package screenshot
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"image/png"
@@ -30,11 +31,20 @@ func WritePNG(d *guitest.Driver, writer io.Writer) error {
 // JSON is preserved and ErrUnavailable is returned. base is a path without an
 // extension; callers own its directory and artifact lifecycle.
 func Save(d *guitest.Driver, base string, options guitest.DumpOptions) error {
+	var dump bytes.Buffer
+	if err := d.DumpJSON(&dump, options); err != nil {
+		return err
+	}
+	// A failed capture must not pair a new tree with a previous run's pixels.
+	if err := os.Remove(base + ".png"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	jsonFile, err := os.OpenFile(base+".json", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
-	err = errors.Join(d.DumpJSON(jsonFile, options), jsonFile.Close())
+	_, err = dump.WriteTo(jsonFile)
+	err = errors.Join(err, jsonFile.Close())
 	if err != nil {
 		return err
 	}
@@ -46,7 +56,11 @@ func Save(d *guitest.Driver, base string, options guitest.DumpOptions) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(png.Encode(file, img), file.Close())
+	err = errors.Join(png.Encode(file, img), file.Close())
+	if err != nil {
+		_ = os.Remove(base + ".png")
+	}
+	return err
 }
 
 type FailureReporter interface {
