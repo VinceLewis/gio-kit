@@ -65,3 +65,16 @@ func TestG2OpenColumnMinimumWidth(t *testing.T) {
 		t.Fatalf("open column shrank to %v", got)
 	}
 }
+
+func TestCardSortToolbarSummarisesSortWithoutColumnHeaderStrip(t *testing.T) {
+	columns := []Column{{ID: "title", Header: "Title", Sortable: true}, {ID: "date", Header: "Event date", Sortable: true}}
+	if got := cardSortLabel(nil, columns); got != "Sort cards" {
+		t.Fatalf("empty label = %q", got)
+	}
+	if got := cardSortLabel([]SortSpec{{ColumnID: "date", Descending: true}}, columns); got != "Sort: Event date descending" {
+		t.Fatalf("active label = %q", got)
+	}
+	if !hasSortableColumn(columns) || hasSortableColumn([]Column{{ID: "title", Header: "Title"}}) {
+		t.Fatal("sortable column detection is wrong")
+	}
+}

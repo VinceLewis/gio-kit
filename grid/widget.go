@@ -52,6 +52,8 @@ type Widget struct {
 	actions          map[string]*widget.Clickable
 	retry            widget.Clickable
 	clearSel         widget.Clickable
+	cardSort         widget.Clickable
+	cardSortOpen     bool
 }
 
 func NewWidget(controller *Controller) *Widget {

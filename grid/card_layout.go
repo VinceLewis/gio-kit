@@ -3,6 +3,7 @@ package grid
 import (
 	"fmt"
 	"image/color"
+	"strings"
 
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
@@ -49,7 +50,7 @@ func fixedTableColumns(columns []Column) []Column {
 }
 
 func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) layout.Dimensions {
-	children := make([]layout.FlexChild, 0, len(columns)+2)
+	children := make([]layout.FlexChild, 0, 2)
 	if w.EnableSelection {
 		allSelected := len(snapshot.Rows) > 0
 		rowIDs := make([]string, 0, len(snapshot.Rows))
@@ -65,42 +66,95 @@ func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, sna
 			return selectionControl(gtx, theme, &w.selectAll, "Select loaded rows")
 		}))
 	}
-	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		label := material.Caption(theme, "Sort")
-		label.Color = color.NRGBA{R: 91, G: 105, B: 127, A: 255}
-		return layout.Inset{Left: unit.Dp(4), Right: unit.Dp(4)}.Layout(gtx, label.Layout)
-	}))
+	if hasSortableColumn(columns) {
+		if w.cardSort.Clicked(gtx) {
+			w.cardSortOpen = !w.cardSortOpen
+		}
+		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			label := cardSortLabel(snapshot.Sort, columns)
+			return w.cardSort.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				semantic.Button.Add(gtx.Ops)
+				semantic.LabelOp("Choose card sort").Add(gtx.Ops)
+				semantic.DescriptionOp(label).Add(gtx.Ops)
+				labelStyle := material.Body2(theme, label+"  ▾")
+				labelStyle.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
+				labelStyle.Alignment = text.Start
+				return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(8), Right: unit.Dp(12)}.Layout(gtx, labelStyle.Layout)
+			})
+		}))
+	}
+	return surface(gtx, color.NRGBA{R: 237, G: 242, B: 251, A: 255}, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if !w.cardSortOpen {
+					return layout.Dimensions{}
+				}
+				return w.layoutCardSortMenu(gtx, theme, snapshot, columns)
+			}),
+		)
+	})
+}
+
+func hasSortableColumn(columns []Column) bool {
+	for _, column := range columns {
+		if column.Sortable {
+			return true
+		}
+	}
+	return false
+}
+
+func cardSortLabel(sort []SortSpec, columns []Column) string {
+	if len(sort) == 0 {
+		return "Sort cards"
+	}
+	parts := make([]string, 0, len(sort))
+	for _, spec := range sort {
+		for _, column := range columns {
+			if column.ID == spec.ColumnID {
+				direction := "ascending"
+				if spec.Descending {
+					direction = "descending"
+				}
+				parts = append(parts, column.Header+" "+direction)
+				break
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "Sort cards"
+	}
+	return "Sort: " + strings.Join(parts, ", ")
+}
+
+func (w *Widget) layoutCardSortMenu(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) layout.Dimensions {
+	var children []layout.FlexChild
 	for _, column := range columns {
 		if !column.Sortable {
 			continue
 		}
 		column := column
-		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			click := w.header(column.ID)
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			click := w.header("card-sort." + column.ID)
 			if click.Clicked(gtx) {
 				_ = w.Controller.ToggleSort(column.ID, w.AdditiveSort)
+				w.cardSortOpen = false
 			}
+			label := column.Header + sortSuffix(snapshot.Sort, column.ID)
 			return click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				semantic.Button.Add(gtx.Ops)
 				semantic.LabelOp("Sort by " + column.Header).Add(gtx.Ops)
 				semantic.DescriptionOp(sortSuffix(snapshot.Sort, column.ID)).Add(gtx.Ops)
-				label := material.Caption(theme, column.Header+sortSuffix(snapshot.Sort, column.ID))
-				label.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
-				label.Alignment = text.Start
-				switch column.Align {
-				case AlignMiddle:
-					label.Alignment = text.Middle
-				case AlignEnd:
-					label.Alignment = text.End
-				}
-				label.MaxLines = 1
-				return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(2), Right: unit.Dp(2)}.Layout(gtx, label.Layout)
+				labelStyle := material.Body1(theme, label)
+				labelStyle.Alignment = text.Start
+				return layout.Inset{Top: unit.Dp(11), Bottom: unit.Dp(11), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, labelStyle.Layout)
 			})
 		}))
 	}
-	return surface(gtx, color.NRGBA{R: 237, G: 242, B: 251, A: 255}, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
-	})
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
 func (w *Widget) layoutCardRows(gtx layout.Context, theme *material.Theme, snapshot Snapshot, columns []Column) layout.Dimensions {

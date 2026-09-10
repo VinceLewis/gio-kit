@@ -2,6 +2,7 @@ package form
 
 import (
 	"context"
+	"image"
 	"image/color"
 	"strings"
 	"time"
@@ -17,17 +18,23 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/VinceLewis/gio-kit/accessibility"
+	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
 // Widget renders every visible field from the schema. Retain it across frames.
 type Widget struct {
-	Form            *Form
-	OnReference     func(FieldSchema)
-	OnAttachment    func(FieldSchema)
-	OnSaveAndClose  func()
-	OnDelete        func()
-	DeleteLabel     string
-	OnInvalid       func()
+	Form           *Form
+	OnReference    func(FieldSchema)
+	OnAttachment   func(FieldSchema)
+	OnSaveAndClose func()
+	OnDelete       func()
+	DeleteLabel    string
+	OnInvalid      func()
+	// RequireDirtySubmit disables save actions while an update form is clean.
+	// Leave it false for create forms, including pristine default-only creates.
+	RequireDirtySubmit bool
+	// AdditionalDirty joins caller-owned staged state to save gating.
+	AdditionalDirty bool
 	Editors         map[string]*widget.Editor
 	buttons         map[string]*widget.Clickable
 	checks          map[string]*widget.Bool
@@ -46,18 +53,38 @@ type Widget struct {
 	delete          widget.Clickable
 	list            widget.List
 	pendingClose    bool
+	cancelIcon      *widget.Icon
+	saveIcon        *widget.Icon
+	saveCloseIcon   *widget.Icon
+	deleteIcon      *widget.Icon
+	dateIcon        *widget.Icon
+	timeIcon        *widget.Icon
+	temporalOpen    string
+	temporalDraft   map[string]time.Time
 }
 
 func NewWidget(form *Form) *Widget {
 	return &Widget{
 		Form: form, Editors: make(map[string]*widget.Editor),
-		buttons:     make(map[string]*widget.Clickable),
-		checks:      make(map[string]*widget.Bool),
-		focused:     make(map[string]bool),
-		textPress:   make(map[string]*textPress),
-		choiceLists: make(map[string]*widget.List),
-		list:        widget.List{List: layout.List{Axis: layout.Vertical}},
+		buttons:       make(map[string]*widget.Clickable),
+		checks:        make(map[string]*widget.Bool),
+		focused:       make(map[string]bool),
+		textPress:     make(map[string]*textPress),
+		choiceLists:   make(map[string]*widget.List),
+		list:          widget.List{List: layout.List{Axis: layout.Vertical}},
+		cancelIcon:    staticIcon(icons.NavigationClose),
+		saveIcon:      staticIcon(icons.ContentSave),
+		saveCloseIcon: staticIcon(icons.ActionExitToApp),
+		deleteIcon:    staticIcon(icons.ActionDelete),
+		dateIcon:      staticIcon(icons.ActionDateRange),
+		timeIcon:      staticIcon(icons.DeviceAccessTime),
+		temporalDraft: make(map[string]time.Time),
 	}
+}
+
+func staticIcon(data []byte) *widget.Icon {
+	icon, _ := widget.NewIcon(data)
+	return icon
 }
 
 func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
@@ -99,7 +126,7 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 }
 
 func (w *Widget) completePendingClose(snapshot Snapshot) {
-	if !snapshot.Submitting && snapshot.SubmitError == nil && !snapshot.Dirty && w.pendingClose {
+	if !snapshot.Submitting && snapshot.SubmitError == nil && !snapshot.Dirty && !w.AdditionalDirty && w.pendingClose {
 		w.pendingClose = false
 		if w.OnSaveAndClose != nil {
 			w.OnSaveAndClose()
@@ -281,6 +308,8 @@ func (w *Widget) input(gtx layout.Context, theme *material.Theme, field FieldSta
 				)
 			})
 		})
+	case FieldDate, FieldDateTime, FieldTime:
+		return w.temporalInput(gtx, theme, field)
 	default:
 		editor := w.editor(field)
 		focused := gtx.Focused(editor)
@@ -423,13 +452,14 @@ func (w *Widget) handleTextPress(gtx layout.Context, fieldID string, editor *wid
 }
 
 func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	saveDisabled := w.submitDisabled(snapshot)
 	if w.delete.Clicked(gtx) && !snapshot.Submitting && w.OnDelete != nil {
 		w.OnDelete()
 	}
 	if w.cancel.Clicked(gtx) {
 		w.Form.Cancel()
 	}
-	if w.save.Clicked(gtx) && !snapshot.Submitting {
+	if w.save.Clicked(gtx) && !saveDisabled {
 		if snapshot.Valid {
 			w.pendingClose = false
 			_ = w.Form.Submit(context.Background())
@@ -437,7 +467,7 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			w.OnInvalid()
 		}
 	}
-	if w.saveClose.Clicked(gtx) && !snapshot.Submitting {
+	if w.saveClose.Clicked(gtx) && !saveDisabled {
 		if snapshot.Valid {
 			w.pendingClose = true
 			_ = w.Form.Submit(context.Background())
@@ -449,34 +479,33 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{}.Layout(gtx,
-					layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, "CANCEL", snapshot.Submitting, false)),
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, "CANCEL", snapshot.Submitting, false, false)),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
-					layout.Flexed(1, w.actionButton(gtx, theme, &w.save, "SAVE", !snapshot.Valid || snapshot.Submitting, false)),
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.save, w.saveIcon, "SAVE", saveDisabled, false, false)),
 				)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{}.Layout(gtx, layout.Flexed(1, w.actionButton(gtx, theme, &w.saveClose, "SAVE & CLOSE", !snapshot.Valid || snapshot.Submitting, true)))
+					return layout.Flex{}.Layout(gtx, layout.Flexed(1, w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, "SAVE & CLOSE", saveDisabled, true, false)))
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return w.actionStatus(gtx, theme, snapshot)
+					return w.deleteAction(gtx, theme, snapshot)
 				})
 			}),
 		)
 	}
 	children := []layout.FlexChild{
-		layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, "CANCEL", snapshot.Submitting, false)),
+		layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, "CANCEL", snapshot.Submitting, false, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
 		}),
-		layout.Flexed(1, w.actionButton(gtx, theme, &w.save, "SAVE", !snapshot.Valid || snapshot.Submitting, false)),
+		layout.Flexed(1, w.actionButton(gtx, theme, &w.save, w.saveIcon, "SAVE", saveDisabled, false, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
 		}),
-		layout.Flexed(1.35, w.actionButton(gtx, theme, &w.saveClose, "SAVE & CLOSE", !snapshot.Valid || snapshot.Submitting, true)),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.dirtyStatus(gtx, theme, snapshot) }),
+		layout.Flexed(1.35, w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, "SAVE & CLOSE", saveDisabled, true, false)),
 	}
 	if w.OnDelete != nil {
 		label := w.DeleteLabel
@@ -484,53 +513,75 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			label = "DELETE"
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, material.Button(theme, &w.delete, label).Layout)
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, label, snapshot.Submitting, false, true))
 		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
+func (w *Widget) submitDisabled(snapshot Snapshot) bool {
+	return !snapshot.Valid || snapshot.Submitting || w.RequireDirtySubmit && !snapshot.Dirty && !w.AdditionalDirty
 }
 
 func stackFormActions(gtx layout.Context) bool {
 	return gtx.Constraints.Max.X < gtx.Dp(unit.Dp(520))
 }
 
-func (w *Widget) actionStatus(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
-	children := []layout.FlexChild{layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-		return w.dirtyStatus(gtx, theme, snapshot)
-	})}
+func (w *Widget) deleteAction(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
+	children := []layout.FlexChild{layout.Flexed(1, func(layout.Context) layout.Dimensions { return layout.Dimensions{} })}
 	if w.OnDelete != nil {
 		label := w.DeleteLabel
 		if label == "" {
 			label = "DELETE"
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, material.Button(theme, &w.delete, label).Layout)
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, label, snapshot.Submitting, false, true))
 		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
-func (w *Widget) dirtyStatus(gtx layout.Context, theme *material.Theme, snapshot Snapshot) layout.Dimensions {
-	mark := "CLEAN"
-	if snapshot.Dirty {
-		mark = "DIRTY"
-	}
-	label := material.Caption(theme, mark)
-	label.Alignment = text.Middle
-	return layout.Inset{Left: unit.Dp(6), Right: unit.Dp(6)}.Layout(gtx, label.Layout)
-}
-
-func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, label string, disabled, primary bool) layout.Widget {
+func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, icon *widget.Icon, label string, disabled, primary, destructive bool) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		button := material.Button(theme, click, label)
-		button.TextSize = unit.Sp(11)
-		if !primary {
-			button.Background = color.NRGBA{R: 56, G: 76, B: 112, A: 255}
+		background := color.NRGBA{R: 56, G: 76, B: 112, A: 255}
+		if primary {
+			background = theme.Palette.ContrastBg
+		}
+		if destructive {
+			background = color.NRGBA{R: 170, G: 42, B: 52, A: 255}
 		}
 		if disabled {
-			button.Background = color.NRGBA{R: 150, G: 157, B: 168, A: 255}
+			background = color.NRGBA{R: 150, G: 157, B: 168, A: 255}
 			gtx = gtx.Disabled()
 		}
-		return button.Layout(gtx)
+		button := material.ButtonLayout(theme, click)
+		button.Background = background
+		button.CornerRadius = unit.Dp(12)
+		semantic.LabelOp(label).Add(gtx.Ops)
+		return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.Y = gtx.Dp(unit.Dp(48))
+			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(10), Top: unit.Dp(8), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if icon == nil {
+								return layout.Dimensions{}
+							}
+							gtx.Constraints.Min = image.Pt(gtx.Dp(unit.Dp(20)), gtx.Dp(unit.Dp(20)))
+							gtx.Constraints.Max = gtx.Constraints.Min
+							return layout.Inset{Right: unit.Dp(7)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return icon.Layout(gtx, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+							})
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							labelStyle := material.Label(theme, unit.Sp(11), label)
+							labelStyle.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+							labelStyle.Alignment = text.Middle
+							return labelStyle.Layout(gtx)
+						}),
+					)
+				})
+			})
+		})
 	}
 }

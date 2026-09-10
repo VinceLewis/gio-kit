@@ -9,6 +9,7 @@ import (
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
+	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -210,19 +211,44 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 		button.Size, button.Inset = unit.Dp(24), layout.UniformInset(unit.Dp(12))
 		return button.Layout(gtx)
 	}
-	button := material.Button(theme, click, control.Label)
-	button.Inset = layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(16), Right: unit.Dp(16)}
-	if !top {
-		button.Background = color.NRGBA{}
-		button.Color = theme.Palette.Fg
-	}
-	if top || !disabled || control.DisabledReason == "" {
+	if top {
+		button := material.Button(theme, click, control.Label)
+		button.Inset = layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(16), Right: unit.Dp(16)}
 		return button.Layout(gtx)
 	}
+	controlRow := func(gtx layout.Context) layout.Dimensions {
+		return material.Clickable(gtx, click, func(gtx layout.Context) layout.Dimensions {
+			semantic.Button.Add(gtx.Ops)
+			semantic.LabelOp(control.Label).Add(gtx.Ops)
+			semantic.DescriptionOp(control.DisabledReason).Add(gtx.Ops)
+			return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				children := make([]layout.FlexChild, 0, 2)
+				if control.Icon != nil {
+					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						gtx.Constraints.Min, gtx.Constraints.Max = image.Pt(gtx.Dp(unit.Dp(24)), gtx.Dp(unit.Dp(24))), image.Pt(gtx.Dp(unit.Dp(24)), gtx.Dp(unit.Dp(24)))
+						return layout.Inset{Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return control.Icon.Layout(gtx, theme.Palette.Fg)
+						})
+					}))
+				}
+				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					label := material.Body1(theme, control.Label)
+					label.MaxLines = 2
+					return label.Layout(gtx)
+				}))
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+			})
+		})
+	}
+	if !disabled || control.DisabledReason == "" {
+		return controlRow(gtx)
+	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(button.Layout),
+		layout.Rigid(controlRow),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			message := material.Caption(theme, control.DisabledReason)
+			message.Alignment = text.Start
+			message.MaxLines = 4
 			return layout.Inset{Left: unit.Dp(16), Right: unit.Dp(16), Bottom: unit.Dp(8)}.Layout(gtx, message.Layout)
 		}),
 	)
