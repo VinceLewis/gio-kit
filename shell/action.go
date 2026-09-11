@@ -30,7 +30,7 @@ func Action(gtx layout.Context, theme *material.Theme, click *widget.Clickable, 
 			if selected {
 				text.Font.Weight = font.Bold
 			}
-			return text.Layout(gtx)
+			return boundedText(gtx, unit.Dp(44), text.Layout)
 		})
 	})
 	if selected {

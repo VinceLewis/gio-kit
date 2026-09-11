@@ -4,6 +4,19 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-11: ADL-Gio drawer refinement adds explicit action/toggle semantics
+  and dismissal policy, compact close labeling, separate navigation/utility
+  hierarchy, aligned icon/text columns, concise catalog-backed availability,
+  bounded text layout, state-specific interaction painting, and a restrained
+  3dp scrollbar indicator. Routed tests cover press/cancel, mouse hover,
+  keyboard focus, repeated theme toggles while open, context/navigation/Back
+  dismissal, scroll preservation, endpoint reachability, and finite text
+  semantics. Paired headless JSON/PNG captures cover narrow and normal portrait,
+  short landscape, intermediate width, 2x density with enlarged text, both
+  themes and both drawer endpoints. Public Gio still cannot prove effective
+  native accessibility clipping; TalkBack and platform visuals remain device
+  gates. The source definition explicitly assigns `x` to sign-out, so no
+  generic icon mapping was changed.
 - 2026-09-11: consumer headless screenshot inspection caught inherited
   minimum-height constraints inflating switch graphics and misaligning shell
   icons/text despite passing semantic workflows. Intrinsic geometry is now

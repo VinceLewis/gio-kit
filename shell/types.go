@@ -18,6 +18,23 @@ const (
 	ModeWide
 )
 
+// ControlKind determines the control's interaction semantics.
+type ControlKind uint8
+
+const (
+	ControlAction ControlKind = iota
+	ControlToggle
+)
+
+// DrawerDismissal determines whether activating a control dismisses a compact
+// drawer. The zero value preserves the historical close-on-activation policy.
+type DrawerDismissal uint8
+
+const (
+	DismissDrawer DrawerDismissal = iota
+	KeepDrawerOpen
+)
+
 type Item struct {
 	ID, Label, Group, DisabledReason string
 	Icon                             *widget.Icon
@@ -25,16 +42,23 @@ type Item struct {
 }
 
 type Control struct {
-	ID, Label, DisabledReason string
+	ID, Label, DisabledReason, Availability string
 	// CompactLabel is optional visible text beside the top-bar icon. Label
 	// remains the full accessible name, including when this text is elided.
-	CompactLabel      string
-	Icon              *widget.Icon
-	Selected, Enabled bool
+	CompactLabel string
+	Icon         *widget.Icon
+	Kind         ControlKind
+	Dismissal    DrawerDismissal
+	// Value and ValueLabel describe a controlled toggle's current boolean and
+	// visible state. Consumers update Value from OnControl.
+	Value, Selected, Enabled bool
+	ValueLabel               string
 }
 
 type Model struct {
-	Title, DrawerTitle string
+	Title, DrawerTitle                        string
+	UtilityHeading, UnavailableSummary        string
+	OpenNavigationLabel, CloseNavigationLabel string
 	// PageTitle identifies the current destination or transient view. When
 	// supplied it is the visible app-bar title; Title remains accessible.
 	PageTitle      string
@@ -60,6 +84,12 @@ func (m Model) Validate() error {
 			}
 			if seen["control:"+control.ID] {
 				return fmt.Errorf("shell: duplicate control ID %q", control.ID)
+			}
+			if control.Kind > ControlToggle {
+				return fmt.Errorf("shell: control %q has invalid kind", control.ID)
+			}
+			if control.Dismissal > KeepDrawerOpen {
+				return fmt.Errorf("shell: control %q has invalid drawer dismissal", control.ID)
 			}
 			seen["control:"+control.ID] = true
 		}

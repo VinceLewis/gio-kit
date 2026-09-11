@@ -10,6 +10,7 @@ import (
 
 	"gioui.org/f32"
 	"gioui.org/font/gofont"
+	"gioui.org/io/pointer"
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/text"
@@ -115,7 +116,7 @@ func TestShortLandscapeDrawerRoutedReachability(t *testing.T) {
 // N1/N6: controls that cannot fit beside a bounded title remain reachable in
 // the compact drawer, and activating one reveals the resulting content.
 func TestCompactTopBarOverflowRoutedControl(t *testing.T) {
-	model := shell.Model{Title: "Application with a long complete title", DrawerTitle: "Destinations"}
+	model := shell.Model{Title: "Application with a long complete title", DrawerTitle: "Destinations", OpenNavigationLabel: "Navigation"}
 	for i := 0; i < 10; i++ {
 		model.TopBar = append(model.TopBar, shell.Control{ID: fmt.Sprint(i), Label: fmt.Sprintf("Control %02d", i), Icon: shellIcon(t), Enabled: true})
 	}
@@ -158,6 +159,144 @@ func TestCompactTopBarOverflowRoutedControl(t *testing.T) {
 	}
 	if _, err := d.Find(guitest.Label("Current content")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCompactDrawerToggleStateGroupingAndCloseAction(t *testing.T) {
+	model := shell.Model{
+		Title: "Application", DrawerTitle: "Destinations", UtilityHeading: "Utilities",
+		UnavailableSummary: "Some utilities are unavailable", OpenNavigationLabel: "Open navigation", CloseNavigationLabel: "Close navigation",
+		Navigation: []shell.Item{
+			{ID: "one", Label: "One", Enabled: true},
+			{ID: "two", Label: "Two", Enabled: true},
+		},
+		Drawer: []shell.Control{
+			{ID: "theme", Label: "Theme", Kind: shell.ControlToggle, ValueLabel: "Light", Enabled: true, Dismissal: shell.KeepDrawerOpen},
+			{ID: "sync", Label: "Sync", DisabledReason: "Connection required"},
+			{ID: "share", Label: "Share", DisabledReason: "Connection required"},
+			{ID: "admin", Label: "Administration", DisabledReason: "Administrator access required"},
+		},
+	}
+	w, err := shell.NewWidget(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activated := ""
+	w.OnControl = func(id string) {
+		activated = id
+		if id == "theme" {
+			w.Model.Drawer[0].Value = true
+			w.Model.Drawer[0].ValueLabel = "Dark"
+		}
+	}
+	theme := shellTheme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions {
+		return w.Layout(gtx, theme, func(layout.Context) layout.Dimensions { return layout.Dimensions{} })
+	}, guitest.Size(360, 640))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if err := d.Tap(guitest.Description("Open navigation")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Find(guitest.Label("Utilities")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Find(guitest.Label("Connection required")); err != nil {
+		t.Fatal(err)
+	}
+	for _, label := range []string{"Sync", "Share"} {
+		if _, err := d.Find(guitest.All(buttonNamed(label), guitest.Description("Connection required"), guitest.Enabled(false))); err != nil {
+			t.Fatalf("%s lost its detailed accessible explanation: %v", label, err)
+		}
+	}
+	if _, err := d.Find(guitest.Label("Administrator access required")); err != nil {
+		t.Fatal(err)
+	}
+	toggle := guitest.All(guitest.Role(semantic.Switch), guitest.Name("Theme"))
+	if _, err := d.Find(guitest.All(toggle, guitest.Selected(false), guitest.Description("Light"))); err != nil {
+		t.Fatal(err)
+	}
+	before := w.DebugSnapshot(diagnostic.Request{}).State["drawerOffset"]
+	if err := d.Tap(toggle); err != nil {
+		t.Fatal(err)
+	}
+	if activated != "theme" || !w.DrawerOpen() {
+		t.Fatal("toggle activation did not preserve the compact drawer")
+	}
+	if _, err := d.Find(guitest.All(toggle, guitest.Selected(true), guitest.Description("Dark"))); err != nil {
+		t.Fatal(err)
+	}
+	state := w.DebugSnapshot(diagnostic.Request{}).State
+	if state["drawerOffset"] != before {
+		t.Fatal("toggle activation changed drawer scroll position")
+	}
+	for _, key := range []string{"navigationRowHeight", "utilityRowHeight", "groupHeadingHeight", "helpHeight"} {
+		if state[key].(int) <= 0 {
+			t.Fatalf("missing measured %s diagnostic", key)
+		}
+	}
+	if err := d.Tap(guitest.Description("Close navigation")); err != nil {
+		t.Fatal(err)
+	}
+	if w.DrawerOpen() {
+		t.Fatal("close action did not dismiss the compact drawer")
+	}
+}
+
+func TestDrawerInteractionStatesClearWithoutBecomingSelection(t *testing.T) {
+	model := shell.Model{Title: "Application", DrawerTitle: "Destinations", OpenNavigationLabel: "Open navigation", CloseNavigationLabel: "Close navigation", Navigation: []shell.Item{
+		{ID: "one", Label: "One", Selected: true, Enabled: true},
+		{ID: "two", Label: "Two", Enabled: true},
+	}}
+	w, err := shell.NewWidget(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theme := shellTheme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions {
+		return w.Layout(gtx, theme, func(layout.Context) layout.Dimensions { return layout.Dimensions{} })
+	}, guitest.Size(360, 640))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if err := d.Tap(guitest.Description("Open navigation")); err != nil {
+		t.Fatal(err)
+	}
+	two := buttonNamed("Two")
+	if err := d.Press(two); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Frame(); err != nil {
+		t.Fatal(err)
+	}
+	states := w.DebugSnapshot(diagnostic.Request{}).State["navigation"].([]any)
+	if !states[1].(map[string]any)["pressed"].(bool) || states[1].(map[string]any)["selected"].(bool) {
+		t.Fatal("active press was lost or became selection")
+	}
+	if err := d.CancelPointer(); err != nil {
+		t.Fatal(err)
+	}
+	states = w.DebugSnapshot(diagnostic.Request{}).State["navigation"].([]any)
+	if states[1].(map[string]any)["pressed"].(bool) || states[1].(map[string]any)["selected"].(bool) {
+		t.Fatal("cancelled press remained active or became selection")
+	}
+	node, err := d.Find(two)
+	if err != nil {
+		t.Fatal(err)
+	}
+	center := f32.Pt(float32(node.Desc.Bounds.Min.X+node.Desc.Bounds.Max.X)/2, float32(node.Desc.Bounds.Min.Y+node.Desc.Bounds.Max.Y)/2)
+	if err := d.Queue(pointer.Event{Kind: pointer.Move, Source: pointer.Mouse, Position: center}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Frame(); err != nil {
+		t.Fatal(err)
+	}
+	states = w.DebugSnapshot(diagnostic.Request{}).State["navigation"].([]any)
+	if !states[1].(map[string]any)["hovered"].(bool) || states[1].(map[string]any)["selected"].(bool) {
+		t.Fatal("mouse hover was lost or became selection")
 	}
 }
 
