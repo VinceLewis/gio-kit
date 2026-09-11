@@ -225,7 +225,7 @@ func TestPickerShellDialogAndPresentationSemantics(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer d.Close()
-		if err = d.Tap(guitest.Within(guitest.Label("EDIT"), guitest.Label("Second record"))); err != nil {
+		if err = d.Tap(guitest.Within(guitest.All(guitest.Role(semantic.Button), guitest.Name("EDIT")), guitest.Label("Second record"))); err != nil {
 			t.Fatal(err)
 		}
 		if event.RowID != "b" {

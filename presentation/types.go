@@ -3,6 +3,8 @@
 // persistence layer.
 package presentation
 
+import "image/color"
+
 type Page struct {
 	Title    string
 	Loading  bool
@@ -22,16 +24,16 @@ type Section struct {
 }
 
 type Control struct {
-	ID, Kind, Label, Value, DisabledReason string
-	Enabled                                bool
-	Options                                []Option
+	ID, Kind, Label, Value, Icon, DisabledReason string
+	Enabled                                      bool
+	Options                                      []Option
 }
 
 type Option struct{ Value, Label string }
 
 type Action struct {
-	ID, Label, Icon, DisabledReason string
-	Enabled                         bool
+	ID, Label, Icon, Placement, DisabledReason string
+	Enabled                                    bool
 }
 
 type List struct {
@@ -42,6 +44,10 @@ type List struct {
 
 type Row struct {
 	ID, Status, AccessibleLabel string
+	StatusLabel, StatusIcon     string
+	StatusAccessibleLabel       string
+	ColorToken                  string
+	Color                       color.NRGBA
 	Fragments                   []Fragment
 	Actions                     []Action
 }
@@ -75,6 +81,8 @@ type MatrixRow struct {
 
 type MatrixCell struct {
 	Column, Text, Status, AccessibleLabel string
+	ColorToken                            string
+	Color                                 color.NRGBA
 	Enabled                               bool
 }
 
@@ -83,7 +91,10 @@ type Legend struct {
 	Items []LegendItem
 }
 
-type LegendItem struct{ Status, Label, AccessibleLabel string }
+type LegendItem struct {
+	Status, Label, AccessibleLabel, Icon, ColorToken string
+	Color                                            color.NRGBA
+}
 
 type Event struct {
 	Kind, ID, Value, RowID, Date, Column string

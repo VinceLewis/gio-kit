@@ -19,19 +19,41 @@ import (
 
 // Widget retains interaction and scroll state across immediate-mode frames.
 type Widget struct {
-	Page       Page
-	OnEvent    func(Event)
-	list       widget.List
-	clicks     map[string]*widget.Clickable
-	checks     map[string]*widget.Bool
-	selections map[string]string
+	Page    Page
+	OnEvent func(Event)
+	// ResolveColor resolves application-owned theme tokens on each frame.
+	// A zero colour leaves the supplied colour or theme fallback in effect.
+	ResolveColor  func(string) color.NRGBA
+	list          widget.List
+	clicks        map[string]*widget.Clickable
+	checks        map[string]*widget.Bool
+	selections    map[string]string
+	controlValues map[string]string
+	icons         map[string]*widget.Icon
 }
 
 func NewWidget(page Page) *Widget {
-	return &Widget{Page: page, list: widget.List{List: layout.List{Axis: layout.Vertical}}, clicks: map[string]*widget.Clickable{}, checks: map[string]*widget.Bool{}, selections: map[string]string{}}
+	w := &Widget{list: widget.List{List: layout.List{Axis: layout.Vertical}}, clicks: map[string]*widget.Clickable{}, checks: map[string]*widget.Bool{}, selections: map[string]string{}, controlValues: map[string]string{}}
+	w.SetPage(page)
+	return w
 }
 
-func (w *Widget) SetPage(page Page) { w.Page = page }
+func (w *Widget) SetPage(page Page) {
+	w.Page = page
+	// Apply changed loaded values without resetting an optimistic input value
+	// when a caller supplies the same snapshot on every frame.
+	for _, section := range page.Sections {
+		for _, control := range section.Controls {
+			if previous, exists := w.controlValues[control.ID]; !exists || previous != control.Value {
+				if check := w.checks[control.ID]; check != nil {
+					check.Value = control.Value == "true"
+				}
+				delete(w.selections, control.ID)
+			}
+			w.controlValues[control.ID] = control.Value
+		}
+	}
+}
 
 func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {
 	if w == nil {
@@ -56,10 +78,12 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 }
 
 func (w *Widget) layoutSection(gtx layout.Context, theme *material.Theme, section Section) layout.Dimensions {
-	return layout.Inset{Bottom: unit.Dp(18)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return layout.Inset{Bottom: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		children := []layout.FlexChild{}
-		if section.Heading != "" {
-			children = append(children, layout.Rigid(material.H6(theme, section.Heading).Layout))
+		if section.Heading != "" || len(section.Actions) != 0 {
+			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return w.layoutHeading(gtx, theme, section.Heading, section.Actions)
+			}))
 		}
 		if section.Comment != "" {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -68,11 +92,6 @@ func (w *Widget) layoutSection(gtx layout.Context, theme *material.Theme, sectio
 		}
 		if len(section.Controls) != 0 {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutControls(gtx, theme, section.Controls) }))
-		}
-		if len(section.Actions) != 0 {
-			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return w.layoutActions(gtx, theme, section.Actions, "", "")
-			}))
 		}
 		for _, list := range section.Lists {
 			list := list
@@ -91,30 +110,24 @@ func (w *Widget) layoutSection(gtx layout.Context, theme *material.Theme, sectio
 }
 
 func (w *Widget) layoutControls(gtx layout.Context, theme *material.Theme, controls []Control) layout.Dimensions {
-	children := make([]layout.FlexChild, 0, len(controls))
+	children := make([]layout.Widget, 0, len(controls))
 	for _, control := range controls {
 		control := control
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Right: unit.Dp(12), Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				if !control.Enabled {
-					gtx = gtx.Disabled()
-				}
-				switch control.Kind {
-				case "toggle":
-					check := w.check(control.ID, control.Value == "true")
-					if check.Update(gtx) && w.OnEvent != nil {
-						w.OnEvent(Event{Kind: EventControl, ID: control.ID, Value: boolText(check.Value)})
-					}
-					return material.CheckBox(theme, check, control.Label).Layout(gtx)
-				case "select", "contextSelector":
-					return w.layoutSelect(gtx, theme, control)
-				default:
-					return material.Body1(theme, control.Label).Layout(gtx)
-				}
-			})
-		}))
+		children = append(children, func(gtx layout.Context) layout.Dimensions {
+			if !control.Enabled {
+				gtx = gtx.Disabled()
+			}
+			switch control.Kind {
+			case "toggle":
+				return w.layoutToggle(gtx, theme, control)
+			case "select", "contextSelector":
+				return w.layoutSelect(gtx, theme, control)
+			default:
+				return material.Body1(theme, control.Label).Layout(gtx)
+			}
+		})
 	}
-	return layout.Flex{Spacing: layout.SpaceStart}.Layout(gtx, children...)
+	return flow(gtx, 8, children...)
 }
 
 func (w *Widget) layoutSelect(gtx layout.Context, theme *material.Theme, control Control) layout.Dimensions {
@@ -122,8 +135,7 @@ func (w *Widget) layoutSelect(gtx layout.Context, theme *material.Theme, control
 	if value := w.selections[control.ID]; value != "" {
 		current = value
 	}
-	var children []layout.FlexChild
-	children = append(children, layout.Rigid(material.Caption(theme, control.Label).Layout))
+	var children []layout.Widget
 	for _, option := range control.Options {
 		option := option
 		key := "control\x00" + control.ID + "\x00" + option.Value
@@ -138,23 +150,44 @@ func (w *Widget) layoutSelect(gtx layout.Context, theme *material.Theme, control
 		if option.Value == current {
 			label = "✓ " + label
 		}
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+		children = append(children, func(gtx layout.Context) layout.Dimensions {
 			return (accessibility.Group{Label: control.Label + ": " + option.Label, Selected: option.Value == current}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				semantic.SelectedOp(option.Value == current).Add(gtx.Ops)
-				return material.Button(theme, button, label).Layout(gtx)
+				return w.actionButton(gtx, theme, button, Action{Label: label, Enabled: control.Enabled, DisabledReason: control.DisabledReason, Placement: "inline"})
 			})
-		}))
+		})
 	}
-	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(boundedLabel(theme, control.Label, 2).Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return flow(gtx, 6, children...) }),
+	)
+}
+
+func (w *Widget) layoutHeading(gtx layout.Context, theme *material.Theme, title string, actions []Action) layout.Dimensions {
+	var children []layout.Widget
+	if title != "" {
+		children = append(children, func(gtx layout.Context) layout.Dimensions {
+			if len(actions) != 0 {
+				gtx.Constraints.Min.Y = min(gtx.Dp(48), gtx.Constraints.Max.Y)
+			}
+			return layout.W.Layout(gtx, heading(theme, title).Layout)
+		})
+	}
+	for _, action := range actions {
+		action := action
+		children = append(children, func(gtx layout.Context) layout.Dimensions {
+			return w.layoutActions(gtx, theme, []Action{action}, "", "")
+		})
+	}
+	return flow(gtx, 8, children...)
 }
 
 func (w *Widget) layoutList(gtx layout.Context, theme *material.Theme, list List) layout.Dimensions {
 	children := []layout.FlexChild{}
-	if list.Heading != "" {
-		children = append(children, layout.Rigid(material.Subtitle1(theme, list.Heading).Layout))
-	}
-	if len(list.Actions) != 0 {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutActions(gtx, theme, list.Actions, "", "") }))
+	if list.Heading != "" || len(list.Actions) != 0 {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return w.layoutHeading(gtx, theme, list.Heading, list.Actions)
+		}))
 	}
 	if len(list.Rows) == 0 {
 		message := list.EmptyText
@@ -162,7 +195,7 @@ func (w *Widget) layoutList(gtx layout.Context, theme *material.Theme, list List
 			message = "No items"
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(12)).Layout(gtx, material.Body2(theme, message).Layout)
+			return layout.Inset{Top: 8, Bottom: 10}.Layout(gtx, boundedLabel(theme, message, 3).Layout)
 		}))
 	}
 	for _, row := range list.Rows {
@@ -183,10 +216,19 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, owner stri
 	}
 	return (accessibility.Group{Label: label}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Inset{Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return surface(gtx, statusColor(row.Status, theme.Bg), func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(unit.Dp(10)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			return surface(gtx, blend(theme.Bg, theme.Fg, 12), func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 6, Bottom: 6, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.layoutFragments(gtx, theme, row.Fragments) }),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if row.StatusLabel == "" {
+								return layout.Dimensions{}
+							}
+							return (accessibility.Group{Description: row.StatusAccessibleLabel}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return w.layoutStatus(gtx, theme, row.StatusLabel, row.StatusIcon, w.resolveColor(row.ColorToken, row.Color, theme.ContrastBg))
+							})
+						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return w.layoutActions(gtx, theme, row.Actions, row.ID, "")
 						}),
@@ -198,33 +240,81 @@ func (w *Widget) layoutRow(gtx layout.Context, theme *material.Theme, owner stri
 }
 
 func (w *Widget) layoutFragments(gtx layout.Context, theme *material.Theme, fragments []Fragment) layout.Dimensions {
-	children := make([]layout.FlexChild, 0, len(fragments))
+	// Preserve declared order. A bold value starts a primary line; subsequent
+	// summary values wrap individually instead of competing for a rigid row.
+	var children []layout.FlexChild
+	var line []layout.Widget
+	lineText := false
+	var pendingIcons []Fragment
+	flush := func() {
+		if len(line) == 0 {
+			return
+		}
+		items := line
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions { return flow(gtx, 3, items...) }))
+		line = nil
+		lineText = false
+	}
 	for _, fragment := range fragments {
 		fragment := fragment
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+		if fragment.Kind == "icon" {
+			pendingIcons = append(pendingIcons, fragment)
+			continue
+		}
+		icons := pendingIcons
+		pendingIcons = nil
+		if fragment.Style == "bold" && lineText {
+			flush()
+		}
+		lineText = lineText || fragment.Text != ""
+		line = append(line, func(gtx layout.Context) layout.Dimensions {
 			value := fragment.Text
-			if fragment.Kind == "icon" && fragment.Icon != "" {
-				value = "[" + fragment.Icon + "]"
-			}
-			style := material.Body2(theme, value)
+			style := boundedLabel(theme, value, 2)
 			if fragment.Style == "bold" {
-				style.Font.Weight = 700
+				style = heading(theme, value)
 			}
 			if fragment.Style == "muted" || fragment.Style == "caption" {
 				style.TextSize = unit.Sp(12)
 			}
-			style.MaxLines = 3
-			return style.Layout(gtx)
-		}))
+			var parts []layout.FlexChild
+			for _, icon := range icons {
+				icon := icon
+				parts = append(parts, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return w.layoutFragmentIcon(gtx, theme, icon)
+					})
+				}))
+			}
+			parts = append(parts, layout.Rigid(style.Layout))
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx, parts...)
+		})
+		if fragment.Style == "bold" {
+			flush()
+		}
 	}
-	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
+	for _, icon := range pendingIcons {
+		icon := icon
+		line = append(line, func(gtx layout.Context) layout.Dimensions { return w.layoutFragmentIcon(gtx, theme, icon) })
+	}
+	flush()
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+}
+
+func (w *Widget) layoutFragmentIcon(gtx layout.Context, theme *material.Theme, fragment Fragment) layout.Dimensions {
+	icon := w.icon(fragment.Icon)
+	if icon == nil {
+		return boundedLabel(theme, fragment.AccessibleLabel, 2).Layout(gtx)
+	}
+	return (accessibility.Group{Label: fragment.AccessibleLabel}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layoutIcon(gtx, icon, theme.Fg)
+	})
 }
 
 func (w *Widget) layoutActions(gtx layout.Context, theme *material.Theme, actions []Action, rowID, date string) layout.Dimensions {
-	children := make([]layout.FlexChild, 0, len(actions))
+	children := make([]layout.Widget, 0, len(actions))
 	for _, action := range actions {
 		action := action
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+		children = append(children, func(gtx layout.Context) layout.Dimensions {
 			key := "action\x00" + action.ID + "\x00" + rowID + "\x00" + date
 			button := w.click(key)
 			if button.Clicked(gtx) && action.Enabled && w.OnEvent != nil {
@@ -233,10 +323,10 @@ func (w *Widget) layoutActions(gtx layout.Context, theme *material.Theme, action
 			if !action.Enabled {
 				gtx = gtx.Disabled()
 			}
-			return layout.Inset{Right: unit.Dp(6), Top: unit.Dp(4)}.Layout(gtx, material.Button(theme, button, action.Label).Layout)
-		}))
+			return w.actionButton(gtx, theme, button, action)
+		})
 	}
-	return layout.Flex{Spacing: layout.SpaceStart}.Layout(gtx, children...)
+	return flow(gtx, 6, children...)
 }
 
 func (w *Widget) layoutCalendar(gtx layout.Context, theme *material.Theme, calendar Calendar) layout.Dimensions {
@@ -247,17 +337,27 @@ func (w *Widget) layoutCalendar(gtx layout.Context, theme *material.Theme, calen
 	if next.Clicked(gtx) && w.OnEvent != nil {
 		w.OnEvent(Event{Kind: EventCalendarMonth, ID: calendar.ID, Value: "next"})
 	}
-	children := []layout.FlexChild{layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(material.Button(theme, previous, "PREVIOUS").Layout),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+	var children []layout.FlexChild
+	if calendar.Heading != "" {
+		children = append(children, layout.Rigid(heading(theme, calendar.Heading).Layout))
+	}
+	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+		return flow(gtx, 6,
+			func(gtx layout.Context) layout.Dimensions {
+				return w.actionButton(gtx, theme, previous, Action{Label: "PREVIOUS", Icon: "chevron-left", Enabled: true, Placement: "inline"})
+			},
+			func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.Y = min(gtx.Dp(48), gtx.Constraints.Max.Y)
 				label := material.Subtitle1(theme, calendar.Month)
 				label.Alignment = text.Middle
-				return label.Layout(gtx)
-			}),
-			layout.Rigid(material.Button(theme, next, "NEXT").Layout),
+				label.MaxLines, label.Truncator = 2, "…"
+				return layout.W.Layout(gtx, label.Layout)
+			},
+			func(gtx layout.Context) layout.Dimensions {
+				return w.actionButton(gtx, theme, next, Action{Label: "NEXT", Icon: "chevron-right", Enabled: true, Placement: "inline"})
+			},
 		)
-	})}
+	}))
 	if len(calendar.Days) == 0 {
 		children = append(children, layout.Rigid(material.Body2(theme, calendar.EmptyText).Layout))
 	}
@@ -283,7 +383,7 @@ func (w *Widget) layoutCalendar(gtx layout.Context, theme *material.Theme, calen
 }
 
 func (w *Widget) layoutMatrix(gtx layout.Context, theme *material.Theme, matrix Matrix) layout.Dimensions {
-	children := []layout.FlexChild{layout.Rigid(material.Subtitle1(theme, matrix.Heading).Layout)}
+	children := []layout.FlexChild{layout.Rigid(heading(theme, matrix.Heading).Layout)}
 	if matrix.DisabledReason != "" {
 		children = append(children, layout.Rigid(material.Caption(theme, matrix.DisabledReason).Layout))
 	}
@@ -293,12 +393,10 @@ func (w *Widget) layoutMatrix(gtx layout.Context, theme *material.Theme, matrix 
 	for _, row := range matrix.Rows {
 		row := row
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			cells := []layout.FlexChild{layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, material.Body2(theme, row.Label).Layout)
-			})}
+			var cells []layout.Widget
 			for _, cell := range row.Cells {
 				cell := cell
-				cells = append(cells, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				cells = append(cells, func(gtx layout.Context) layout.Dimensions {
 					button := w.click("matrix\x00" + matrix.ID + "\x00" + row.ID + "\x00" + cell.Column)
 					if button.Clicked(gtx) && matrix.Editable && cell.Enabled && w.OnEvent != nil {
 						w.OnEvent(Event{Kind: EventMatrixCell, ID: matrix.ID, RowID: row.ID, Column: cell.Column})
@@ -311,11 +409,20 @@ func (w *Widget) layoutMatrix(gtx layout.Context, theme *material.Theme, matrix 
 						name = row.Label + ": " + cell.Column
 					}
 					return (accessibility.Group{Label: name, Description: matrix.DisabledReason, Disabled: !matrix.Editable || !cell.Enabled}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Right: unit.Dp(4)}.Layout(gtx, material.Button(theme, button, cell.Text).Layout)
+						return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							semantic.Button.Add(gtx.Ops)
+							gtx.Constraints.Min.Y = min(gtx.Dp(48), gtx.Constraints.Max.Y)
+							return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return w.layoutStatus(gtx, theme, cell.Text, "", w.resolveColor(cell.ColorToken, cell.Color, theme.ContrastBg))
+							})
+						})
 					})
-				}))
+				})
 			}
-			return layout.Flex{Alignment: layout.Middle}.Layout(gtx, cells...)
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(boundedLabel(theme, row.Label, 2).Layout),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return flow(gtx, 8, cells...) }),
+			)
 		}))
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
@@ -329,7 +436,9 @@ func (w *Widget) layoutLegends(gtx layout.Context, theme *material.Theme) layout
 		for _, item := range legend.Items {
 			item := item
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return (accessibility.Group{Label: item.AccessibleLabel}).Layout(gtx, material.Caption(theme, "● "+item.Label).Layout)
+				return (accessibility.Group{Label: item.AccessibleLabel}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return w.layoutStatus(gtx, theme, item.Label, item.Icon, w.resolveColor(item.ColorToken, item.Color, theme.ContrastBg))
+				})
 			}))
 		}
 	}
@@ -366,19 +475,4 @@ func surface(gtx layout.Context, background color.NRGBA, content layout.Widget) 
 	call.Add(gtx.Ops)
 	area.Pop()
 	return dims
-}
-
-func statusColor(status string, fallback color.NRGBA) color.NRGBA {
-	switch strings.ToLower(status) {
-	case "conflict", "unavailable":
-		return color.NRGBA{R: 255, G: 232, B: 232, A: 255}
-	case "available":
-		return color.NRGBA{R: 229, G: 247, B: 233, A: 255}
-	case "busyelwhere", "busyelsewhere":
-		return color.NRGBA{R: 255, G: 244, B: 214, A: 255}
-	case "event", "rehearsal":
-		return color.NRGBA{R: 231, G: 239, B: 252, A: 255}
-	default:
-		return fallback
-	}
 }

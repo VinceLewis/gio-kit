@@ -4,6 +4,20 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-11: ADL-Gio's authorized `ui-tweaks-1.md` implementation adds
+  responsive shell title/control allocation and overflow, independently
+  scrollable short-height navigation, explicit selected markers, optional
+  application-owned bar surface colours, and compact actions. Presentation
+  adds wrapped labelled switches, semantic icons, compact row hierarchy,
+  declared status accents and live theme-token resolution. Routed tests found
+  and fixed disabled navigation/control semantics disappearing under Gio's
+  disabled input handling; disabled roles/names remain visible and reject input.
+  The full `GOWORK=off ./tools/test-checkpoint.sh -count=1` checkpoint passes,
+  including CGO-on/off core isolation, demo root, full Termux tests/vet and
+  generated-reference checks. The optional GPU probe passes. ADL-Gio's real
+  root passes with the integration workspace; publication, consumer clean-pin
+  verification and its signed Android platform candidate follow. Device
+  insets, TalkBack, IME and visual acceptance remain user-owned.
 - 2026-09-10: authorized T3-8 fallback feasibility stopped negative. Public Gio
   v0.10.2 application APIs can replay submitted operations into window-local
   semantic bounds, but cannot expose the native view's absolute display origin,

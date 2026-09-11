@@ -122,11 +122,12 @@ func TestReusableMaterialControlsExposeRoleNameStateAndGrouping(t *testing.T) {
 		if _, err = d.Find(guitest.All(guitest.Role(semantic.Button), guitest.Name("Home"), guitest.Selected(true), guitest.Enabled(true))); err != nil {
 			t.Fatalf("%v nodes=%+v", err, d.Nodes())
 		}
-		if _, err = d.Find(guitest.Label("Admin")); err != nil {
-			t.Fatal(err)
+		disabled := guitest.All(guitest.Role(semantic.Button), guitest.Name("Admin"), guitest.Enabled(false))
+		if _, err = d.Find(disabled); err != nil {
+			t.Fatalf("disabled shell destination lost accessible semantics: %v", err)
 		}
-		if _, err = d.Find(guitest.All(guitest.Role(semantic.Button), guitest.Name("Admin"))); !errors.Is(err, guitest.ErrNotFound) {
-			t.Fatalf("disabled shell destination remained actionable: %v", err)
+		if err = d.Tap(disabled); !errors.Is(err, guitest.ErrNotInteractable) {
+			t.Fatalf("disabled shell destination accepted input: %v", err)
 		}
 	})
 

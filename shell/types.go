@@ -26,14 +26,20 @@ type Item struct {
 
 type Control struct {
 	ID, Label, DisabledReason string
-	Icon                      *widget.Icon
-	Enabled                   bool
+	// CompactLabel is optional visible text beside the top-bar icon. Label
+	// remains the full accessible name, including when this text is elided.
+	CompactLabel      string
+	Icon              *widget.Icon
+	Selected, Enabled bool
 }
 
 type Model struct {
 	Title, DrawerTitle string
-	Navigation         []Item
-	TopBar, Drawer     []Control
+	// PageTitle identifies the current destination or transient view. When
+	// supplied it is the visible app-bar title; Title remains accessible.
+	PageTitle      string
+	Navigation     []Item
+	TopBar, Drawer []Control
 }
 
 func (m Model) Validate() error {
