@@ -170,7 +170,7 @@ func (w *Widget) layoutHeading(gtx layout.Context, theme *material.Theme, title 
 			if len(actions) != 0 {
 				gtx.Constraints.Min.Y = min(gtx.Dp(48), gtx.Constraints.Max.Y)
 			}
-			return layout.W.Layout(gtx, heading(theme, title).Layout)
+			return layout.Center.Layout(gtx, heading(theme, title).Layout)
 		})
 	}
 	for _, action := range actions {

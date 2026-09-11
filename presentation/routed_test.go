@@ -102,7 +102,7 @@ func TestRoutedSwitchesWrapAndRetainSelectionAcrossResize(t *testing.T) {
 			t.Fatal("compact primary action did not route")
 		}
 		button, err := d.Find(guitest.All(guitest.Role(semantic.Button), guitest.Name("Create")))
-		if err != nil || button.Desc.Bounds.Dy() < 48 || button.Desc.Bounds.Dx() > 130 {
+		if err != nil || button.Desc.Bounds.Dy() != 48 || button.Desc.Bounds.Dx() > 130 {
 			t.Fatalf("primary action lost compact accessible bounds: %v; %v", button.Desc.Bounds, err)
 		}
 	}

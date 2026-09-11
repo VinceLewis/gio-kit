@@ -252,7 +252,7 @@ func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item
 			semantic.LabelOp(item.Label).Add(gtx.Ops)
 			semantic.DescriptionOp(item.DisabledReason).Add(gtx.Ops)
 			semantic.SelectedOp(item.Selected).Add(gtx.Ops)
-			return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return centeredRow(gtx, layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(16), Right: unit.Dp(16)}, func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, 2)
 				if item.Icon != nil {
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -304,7 +304,7 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 			if top {
 				inset.Left, inset.Right = unit.Dp(8), unit.Dp(8)
 			}
-			return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return centeredRow(gtx, inset, func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, 2)
 				if control.Icon != nil {
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -348,6 +348,16 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 			return layout.Inset{Left: unit.Dp(16), Right: unit.Dp(16), Bottom: unit.Dp(8)}.Layout(gtx, message.Layout)
 		}),
 	)
+}
+
+func centeredRow(gtx layout.Context, inset layout.Inset, content layout.Widget) layout.Dimensions {
+	// Keep the outer touch target while measuring the icon and label at their
+	// intrinsic heights. A label otherwise reports an inherited minimum height
+	// although its glyphs still begin at the top, misaligning the visible row.
+	return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.Y = 0
+		return inset.Layout(gtx, content)
+	})
 }
 
 func semanticClickable(gtx layout.Context, click *widget.Clickable, selected bool, content layout.Widget) layout.Dimensions {

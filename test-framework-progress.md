@@ -4,6 +4,14 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-11: consumer headless screenshot inspection caught inherited
+  minimum-height constraints inflating switch graphics and misaligning shell
+  icons/text despite passing semantic workflows. Intrinsic geometry is now
+  measured independently: 36x22dp switch graphics, 48dp labelled touch targets
+  and a 56dp shell bar. New geometry regressions cover density and narrow
+  bounds. The complete checkpoint and ADL production-root/GPU suites pass
+  again; fresh light/dark portrait/landscape renders were inspected. These
+  diagnostics establish layout evidence, not Android platform acceptance.
 - 2026-09-11: ADL-Gio's authorized `ui-tweaks-1.md` implementation adds
   responsive shell title/control allocation and overflow, independently
   scrollable short-height navigation, explicit selected markers, optional
