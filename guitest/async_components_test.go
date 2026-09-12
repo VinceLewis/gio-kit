@@ -38,7 +38,8 @@ func TestFormValidationSubmissionErrorAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if err = d.Tap(guitest.Label("SAVE")); !errors.Is(err, guitest.ErrNotInteractable) {
+	save := guitest.All(guitest.Role(semantic.Button), guitest.Name("SAVE"))
+	if err = d.Tap(save); !errors.Is(err, guitest.ErrNotInteractable) {
 		t.Fatalf("invalid save: %v", err)
 	}
 	if attempts.Load() != 0 {
@@ -68,7 +69,7 @@ func TestFormValidationSubmissionErrorAndRetry(t *testing.T) {
 	if err = d.Settle(testContext(t)); err != nil {
 		t.Fatal(err)
 	}
-	if err = d.Tap(guitest.Label("SAVE")); err != nil {
+	if err = d.Tap(save); err != nil {
 		t.Fatal(err)
 	}
 	if err = d.Settle(testContext(t)); err != nil {
@@ -80,7 +81,7 @@ func TestFormValidationSubmissionErrorAndRetry(t *testing.T) {
 	if !f.IsDirty() {
 		t.Fatal("failure discarded edits")
 	}
-	if err = d.Tap(guitest.Label("SAVE")); err != nil {
+	if err = d.Tap(save); err != nil {
 		t.Fatal(err)
 	}
 	if err = d.Settle(testContext(t)); err != nil {

@@ -2,9 +2,13 @@ package grid
 
 import (
 	"errors"
+	"image"
 	"testing"
 
+	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/unit"
+	"gioui.org/widget/material"
 )
 
 func TestG2ResponsiveViewMode(t *testing.T) {
@@ -76,5 +80,18 @@ func TestCardSortToolbarSummarisesSortWithoutColumnHeaderStrip(t *testing.T) {
 	}
 	if !hasSortableColumn(columns) || hasSortableColumn([]Column{{ID: "title", Header: "Title"}}) {
 		t.Fatal("sortable column detection is wrong")
+	}
+}
+
+func TestCardSortToolbarUsesIconAndFitsBesideSelection(t *testing.T) {
+	widget := NewWidget(nil)
+	if widget.cardSortIcon == nil {
+		t.Fatal("card sort icon is unavailable")
+	}
+	var operations op.Ops
+	gtx := layout.Context{Ops: &operations, Constraints: layout.Exact(image.Pt(388, 80)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}}
+	dimensions := widget.layoutCardHeader(gtx, material.NewTheme(), Snapshot{}, []Column{{ID: "title", Header: "Title", Sortable: true}})
+	if dimensions.Size.X != 388 || dimensions.Size.Y < 48 {
+		t.Fatalf("card sort toolbar size = %v", dimensions.Size)
 	}
 }

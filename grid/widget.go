@@ -15,6 +15,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
 // Widget renders a Controller using Gio's virtualized layout.List. Keep one
@@ -53,6 +54,7 @@ type Widget struct {
 	retry            widget.Clickable
 	clearSel         widget.Clickable
 	cardSort         widget.Clickable
+	cardSortIcon     *widget.Icon
 	cardSortOpen     bool
 }
 
@@ -70,7 +72,13 @@ func NewWidget(controller *Controller) *Widget {
 		rowOpens:        make(map[string]time.Time),
 		measuredOpen:    make(map[string]bool),
 		actions:         make(map[string]*widget.Clickable),
+		cardSortIcon:    gridIcon(icons.ActionSwapVert),
 	}
+}
+
+func gridIcon(data []byte) *widget.Icon {
+	icon, _ := widget.NewIcon(data)
+	return icon
 }
 
 func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimensions {

@@ -26,6 +26,7 @@ type Widget struct {
 	Form           *Form
 	OnReference    func(FieldSchema)
 	OnAttachment   func(FieldSchema)
+	AfterFields    func(layout.Context, *material.Theme) layout.Dimensions
 	OnSaveAndClose func()
 	OnDelete       func()
 	DeleteLabel    string
@@ -56,6 +57,7 @@ type Widget struct {
 	cancelIcon      *widget.Icon
 	saveIcon        *widget.Icon
 	saveCloseIcon   *widget.Icon
+	saveCloseExit   *widget.Icon
 	deleteIcon      *widget.Icon
 	dateIcon        *widget.Icon
 	timeIcon        *widget.Icon
@@ -74,7 +76,8 @@ func NewWidget(form *Form) *Widget {
 		list:          widget.List{List: layout.List{Axis: layout.Vertical}},
 		cancelIcon:    staticIcon(icons.NavigationClose),
 		saveIcon:      staticIcon(icons.ContentSave),
-		saveCloseIcon: staticIcon(icons.ActionExitToApp),
+		saveCloseIcon: staticIcon(icons.ContentSave),
+		saveCloseExit: staticIcon(icons.ActionExitToApp),
 		deleteIcon:    staticIcon(icons.ActionDelete),
 		dateIcon:      staticIcon(icons.ActionDateRange),
 		timeIcon:      staticIcon(icons.DeviceAccessTime),
@@ -99,6 +102,10 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 			visible = append(visible, field)
 		}
 	}
+	rowCount := len(visible)
+	if w.AfterFields != nil {
+		rowCount++
+	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			w.choiceMaxHeight = gtx.Constraints.Max.Y - gtx.Dp(unit.Dp(80))
@@ -107,7 +114,10 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 				w.choicePending = false
 				w.choiceReady = true
 			}
-			return w.list.Layout(gtx, len(visible), func(gtx layout.Context, index int) layout.Dimensions {
+			return w.list.Layout(gtx, rowCount, func(gtx layout.Context, index int) layout.Dimensions {
+				if index == len(visible) {
+					return w.AfterFields(gtx, theme)
+				}
 				return w.layoutField(gtx, theme, visible[index], index)
 			})
 		}),
@@ -479,14 +489,14 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{}.Layout(gtx,
-					layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, "CANCEL", snapshot.Submitting, false, false)),
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, nil, "CANCEL", snapshot.Submitting, false, false)),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
-					layout.Flexed(1, w.actionButton(gtx, theme, &w.save, w.saveIcon, "SAVE", saveDisabled, false, false)),
+					layout.Flexed(1, w.actionButton(gtx, theme, &w.save, w.saveIcon, nil, "SAVE", saveDisabled, false, false)),
 				)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{}.Layout(gtx, layout.Flexed(1, w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, "SAVE & CLOSE", saveDisabled, true, false)))
+					return layout.Flex{}.Layout(gtx, layout.Flexed(1, w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, w.saveCloseExit, "SAVE & CLOSE", saveDisabled, true, false)))
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -496,16 +506,34 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			}),
 		)
 	}
+	if compactFormActions(gtx) {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, nil, "CANCEL", snapshot.Submitting, false, false)),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
+					layout.Rigid(w.actionButton(gtx, theme, &w.save, w.saveIcon, nil, "SAVE", saveDisabled, false, false)),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx) }),
+					layout.Rigid(w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, w.saveCloseExit, "SAVE & CLOSE", saveDisabled, true, false)),
+				)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return w.deleteAction(gtx, theme, snapshot)
+				})
+			}),
+		)
+	}
 	children := []layout.FlexChild{
-		layout.Flexed(1, w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, "CANCEL", snapshot.Submitting, false, false)),
+		layout.Rigid(w.actionButton(gtx, theme, &w.cancel, w.cancelIcon, nil, "CANCEL", snapshot.Submitting, false, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
 		}),
-		layout.Flexed(1, w.actionButton(gtx, theme, &w.save, w.saveIcon, "SAVE", saveDisabled, false, false)),
+		layout.Rigid(w.actionButton(gtx, theme, &w.save, w.saveIcon, nil, "SAVE", saveDisabled, false, false)),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Spacer{Width: unit.Dp(5)}.Layout(gtx)
 		}),
-		layout.Flexed(1.35, w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, "SAVE & CLOSE", saveDisabled, true, false)),
+		layout.Rigid(w.actionButton(gtx, theme, &w.saveClose, w.saveCloseIcon, w.saveCloseExit, "SAVE & CLOSE", saveDisabled, true, false)),
 	}
 	if w.OnDelete != nil {
 		label := w.DeleteLabel
@@ -513,7 +541,7 @@ func (w *Widget) actions(gtx layout.Context, theme *material.Theme, snapshot Sna
 			label = "DELETE"
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, label, snapshot.Submitting, false, true))
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, nil, label, snapshot.Submitting, false, true))
 		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
@@ -524,6 +552,10 @@ func (w *Widget) submitDisabled(snapshot Snapshot) bool {
 }
 
 func stackFormActions(gtx layout.Context) bool {
+	return gtx.Constraints.Max.X < gtx.Dp(unit.Dp(360))
+}
+
+func compactFormActions(gtx layout.Context) bool {
 	return gtx.Constraints.Max.X < gtx.Dp(unit.Dp(520))
 }
 
@@ -535,13 +567,13 @@ func (w *Widget) deleteAction(gtx layout.Context, theme *material.Theme, snapsho
 			label = "DELETE"
 		}
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, label, snapshot.Submitting, false, true))
+			return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, w.actionButton(gtx, theme, &w.delete, w.deleteIcon, nil, label, snapshot.Submitting, false, true))
 		}))
 	}
 	return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
-func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, icon *widget.Icon, label string, disabled, primary, destructive bool) layout.Widget {
+func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *widget.Clickable, icon, secondIcon *widget.Icon, label string, disabled, primary, destructive bool) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		background := color.NRGBA{R: 56, G: 76, B: 112, A: 255}
 		if primary {
@@ -557,30 +589,42 @@ func (w *Widget) actionButton(gtx layout.Context, theme *material.Theme, click *
 		button := material.ButtonLayout(theme, click)
 		button.Background = background
 		button.CornerRadius = unit.Dp(12)
-		semantic.LabelOp(label).Add(gtx.Ops)
 		return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = gtx.Dp(unit.Dp(48))
-			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(10), Top: unit.Dp(8), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			semantic.LabelOp(label).Add(gtx.Ops)
+			height := min(gtx.Dp(unit.Dp(48)), gtx.Constraints.Max.Y)
+			gtx.Constraints.Min.Y = height
+			gtx.Constraints.Max.Y = height
+			return layout.Inset{Left: unit.Dp(10), Right: unit.Dp(10), Top: unit.Dp(6), Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				children := []layout.FlexChild{
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if icon == nil {
+							return layout.Dimensions{}
+						}
+						gtx.Constraints.Min = image.Pt(gtx.Dp(unit.Dp(20)), gtx.Dp(unit.Dp(20)))
+						gtx.Constraints.Max = gtx.Constraints.Min
+						return icon.Layout(gtx, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+					}),
+				}
+				if secondIcon != nil {
+					children = append(children,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(2)}.Layout(gtx) }),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							if icon == nil {
-								return layout.Dimensions{}
-							}
 							gtx.Constraints.Min = image.Pt(gtx.Dp(unit.Dp(20)), gtx.Dp(unit.Dp(20)))
 							gtx.Constraints.Max = gtx.Constraints.Min
-							return layout.Inset{Right: unit.Dp(7)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return icon.Layout(gtx, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
-							})
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							labelStyle := material.Label(theme, unit.Sp(11), label)
-							labelStyle.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-							labelStyle.Alignment = text.Middle
-							return labelStyle.Layout(gtx)
+							return secondIcon.Layout(gtx, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
 						}),
 					)
-				})
+				}
+				children = append(children,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(7)}.Layout(gtx) }),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						labelStyle := material.Label(theme, unit.Sp(11), label)
+						labelStyle.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+						labelStyle.Alignment = text.Middle
+						return labelStyle.Layout(gtx)
+					}),
+				)
+				return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 			})
 		})
 	}

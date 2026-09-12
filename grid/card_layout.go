@@ -72,14 +72,27 @@ func (w *Widget) layoutCardHeader(gtx layout.Context, theme *material.Theme, sna
 		}
 		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			label := cardSortLabel(snapshot.Sort, columns)
-			return w.cardSort.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				semantic.Button.Add(gtx.Ops)
-				semantic.LabelOp("Choose card sort").Add(gtx.Ops)
-				semantic.DescriptionOp(label).Add(gtx.Ops)
-				labelStyle := material.Body2(theme, label+"  ▾")
-				labelStyle.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
-				labelStyle.Alignment = text.Start
-				return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(8), Right: unit.Dp(12)}.Layout(gtx, labelStyle.Layout)
+			return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return w.cardSort.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					semantic.Button.Add(gtx.Ops)
+					semantic.LabelOp("Choose card sort").Add(gtx.Ops)
+					semantic.DescriptionOp(label).Add(gtx.Ops)
+					labelStyle := material.Body2(theme, label)
+					labelStyle.Color = color.NRGBA{R: 33, G: 65, B: 130, A: 255}
+					labelStyle.Alignment = text.Start
+					return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(12), Left: unit.Dp(8), Right: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								gtx.Constraints.Min.X = gtx.Dp(unit.Dp(20))
+								gtx.Constraints.Min.Y = gtx.Dp(unit.Dp(20))
+								gtx.Constraints.Max = gtx.Constraints.Min
+								return w.cardSortIcon.Layout(gtx, color.NRGBA{R: 33, G: 65, B: 130, A: 255})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions { return layout.Spacer{Width: unit.Dp(8)}.Layout(gtx) }),
+							layout.Flexed(1, labelStyle.Layout),
+						)
+					})
+				})
 			})
 		}))
 	}
