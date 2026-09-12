@@ -237,21 +237,21 @@ run size limits. PNGs are explicitly unredacted and use synthetic fixtures.
 | GK-5 Trace/artifact layer | Gio-Kit | GK-1; integrate after GK-4 | Complete |
 | GK-6 CLI and consumer launcher | Gio-Kit | GK-4, GK-5 | Complete |
 | GK-7 Production demo scenario | Gio-Kit | GK-6 | Complete |
-| GK-8 Docs, gates, publication | Gio-Kit | GK-1–GK-7 | In progress; Gate B passed, publication pending |
+| GK-8 Docs, gates, publication | Gio-Kit | GK-1–GK-7 | Complete |
 | ADL-1 Production-root injection seam | ADL-Gio | P0 | Complete |
 | ADL-2 Reusable fixture harness | ADL-Gio | ADL-1 | Complete |
 | ADL-3 Deterministic runtime decorator | ADL-Gio | ADL-1 | Complete |
-| ADL-4 Published runner pin and launcher | ADL-Gio | GK-8, ADL-2 | Pending |
+| ADL-4 Published runner pin and launcher | ADL-Gio | GK-8, ADL-2 | Complete |
 | ADL-5 Bounded integrity probes | ADL-Gio | ADL-2 | Complete |
-| ADL-6 Synthetic routed scenarios | ADL-Gio | ADL-3–ADL-5 | Pending |
-| ADL-7 Async/retry/restoration scenarios | ADL-Gio | ADL-3–ADL-6 | Pending |
-| ADL-8 Isolation, documentation, Gate B | ADL-Gio | ADL-1–ADL-7 | Pending |
-| GB-0 Giggle governance/provenance gate | ADL + ADL-Gio | ADL-8 | Pending |
-| GB-1 Giggle fixtures | ADL source; pinned by ADL-Gio | GB-0 | Pending |
-| GB-2 Giggle probes | ADL declarations + ADL-Gio engine | GB-1 | Pending |
-| GB-3 Giggle scenarios | ADL source; pinned by ADL-Gio | GB-1, GB-2 | Pending |
-| GB-4 Final Giggle wrapper and ultimate run | ADL-Gio | GB-3 | Pending |
-| F-1 Frozen candidate/device handoff | ADL-Gio | GB-4 | Pending |
+| ADL-6 Synthetic routed scenarios | ADL-Gio | ADL-3–ADL-5 | Complete |
+| ADL-7 Async/retry/restoration scenarios | ADL-Gio | ADL-3–ADL-6 | Complete |
+| ADL-8 Isolation, documentation, Gate B | ADL-Gio | ADL-1–ADL-7 | Complete |
+| GB-0 Giggle governance/provenance gate | ADL + ADL-Gio | ADL-8 | Complete |
+| GB-1 Giggle fixtures | ADL source; pinned by ADL-Gio | GB-0 | Complete |
+| GB-2 Giggle probes | ADL declarations + ADL-Gio engine | GB-1 | Complete |
+| GB-3 Giggle scenarios | ADL source; pinned by ADL-Gio | GB-1, GB-2 | Complete |
+| GB-4 Final Giggle wrapper and ultimate run | ADL-Gio | GB-3 | Complete |
+| F-1 Frozen candidate/device handoff | ADL-Gio | GB-4 | Complete |
 
 ## Phase 0 — Approval and Contract Freeze
 
@@ -361,20 +361,20 @@ possibly repeated mutating action.
 - `guitest/script/jsonpointer.go`
 - focused runner tests
 
-- [ ] Implement sequential `Run(ctx, driver, script, options)` on the caller
+- [x] Implement sequential `Run(ctx, driver, script, options)` on the caller
       goroutine without closing the driver.
-- [ ] Dispatch every v1 action through existing driver APIs.
-- [ ] Implement read-only readiness waits and exactly-once mutation.
-- [ ] Implement explicit settle/advance behavior and assertion polling.
-- [ ] Evaluate snapshots only through bounded/redacted `Capture`.
-- [ ] Define a bounded named-probe callback returning normalized JSON. Reject
+- [x] Dispatch every v1 action through existing driver APIs.
+- [x] Implement read-only readiness waits and exactly-once mutation.
+- [x] Implement explicit settle/advance behavior and assertion polling.
+- [x] Evaluate snapshots only through bounded/redacted `Capture`.
+- [x] Define a bounded named-probe callback returning normalized JSON. Reject
       unknown probes and cap arguments/results before decoding or comparing.
-- [ ] Implement the small JSON Pointer/equality vocabulary without a general
+- [x] Implement the small JSON Pointer/equality vocabulary without a general
       expression evaluator.
-- [ ] Return stable step errors with index, optional ID, operator, code, and
+- [x] Return stable step errors with index, optional ID, operator, code, and
       frame number while preserving useful `errors.Is` behavior.
-- [ ] Track held pointer state; capture before best-effort cancellation.
-- [ ] Test real material widgets and router input, delayed enablement,
+- [x] Track held pointer state; capture before best-effort cancellation.
+- [x] Test real material widgets and router input, delayed enablement,
       exact-once callbacks, ambiguity fail-fast, cancellation, frame limits,
       virtual-time advancement, intermediate loading, and 10,000-row scrolling.
 
@@ -392,15 +392,15 @@ allowlist.
 - `guitest/script/trace-schema-v1.json`
 - focused artifact tests
 
-- [ ] Produce the result, trace, failure dump, and explicit capture artifacts
+- [x] Produce the result, trace, failure dump, and explicit capture artifacts
       described above.
-- [ ] Exclude real-time values and sensitive script/application values from the
+- [x] Exclude real-time values and sensitive script/application values from the
       trace.
-- [ ] Enforce private permissions, atomic replacement, symlink rejection,
+- [x] Enforce private permissions, atomic replacement, symlink rejection,
       deterministic names, and per-file/total limits.
-- [ ] Accept an optional screenshot callback so the core dependency graph stays
+- [x] Accept an optional screenshot callback so the core dependency graph stays
       graphics-free.
-- [ ] Mark every PNG unredacted and fail correctly when a required screenshot
+- [x] Mark every PNG unredacted and fail correctly when a required screenshot
       is unavailable.
 
 **Acceptance:** deterministic artifact comparison passes; injected write,
@@ -414,13 +414,13 @@ partial success.
 - `guitest/scriptcli/cli.go` and tests
 - `cmd/guitest/main.go` and tests
 
-- [ ] Add reusable consumer `run -script -artifacts` parsing around an injected
+- [x] Add reusable consumer `run -script -artifacts` parsing around an injected
       application opener and named fixture/probe registry.
-- [ ] Guarantee deferred joined closure on success, validation failure, runtime
+- [x] Guarantee deferred joined closure on success, validation failure, runtime
       failure, cancellation, and artifact failure.
-- [ ] Add `script-schema`, `trace-schema`, `validate-script`, and
+- [x] Add `script-schema`, `trace-schema`, `validate-script`, and
       `inspect-trace` to `cmd/guitest`.
-- [ ] Do not add application discovery, subprocess compilation, networking,
+- [x] Do not add application discovery, subprocess compilation, networking,
       ADB, dynamic plugins, or a universal run command.
 
 **Acceptance:** a consumer needs only a small compiled launcher; the generic
@@ -431,14 +431,14 @@ artifact CLI remains application-independent and safe on untrusted structure.
 **Owned files:** `cmd/navigation-demo/**`, its scenario testdata, and only the
 demo-specific test script if required.
 
-- [ ] Extract the existing tagged test factory so tests and a
+- [x] Extract the existing tagged test factory so tests and a
       `guitestrunner`-tagged launcher use the same production root.
-- [ ] Keep default Android main excluded only when the runner tag is selected;
+- [x] Keep default Android main excluded only when the runner tag is selected;
       prove the production graph does not import runner packages.
-- [ ] Add one real-root scenario covering startup delay, navigation, editor
+- [x] Add one real-root scenario covering startup delay, navigation, editor
       input, dirty Back with STAY/DISCARD, router/form snapshot assertions, grid
       interaction, and joined teardown.
-- [ ] Use a temporary data directory and real demo storage.
+- [x] Use a temporary data directory and real demo storage.
 
 **Acceptance:** the first JSON scenario passes against the production root and
 proves cleanup; no demo policy enters reusable packages.
@@ -449,11 +449,11 @@ proves cleanup; no demo policy enters reusable packages.
 `docs/guitest-script.md`, `README.md`, `test-framework-progress.md`, generation
 scripts, generated API/command references, `go.mod`, and `go.sum` if changed.
 
-- [ ] Document the DSL, application opener, fixture/probe boundary, auto-wait,
+- [x] Document the DSL, application opener, fixture/probe boundary, auto-wait,
       explicit time, lifecycle ownership, trace privacy, screenshots, and
       platform exclusions.
-- [ ] Generate/check both schemas and all public references.
-- [ ] Run focused tests throughout, then:
+- [x] Generate/check both schemas and all public references.
+- [x] Run focused tests throughout, then:
 
 ```sh
 ./tools/test-guitest.sh -count=1
@@ -463,16 +463,27 @@ CGO_ENABLED=0 ./tools/test-guitest.sh -count=1
 ./tools/test-checkpoint.sh -count=1
 ```
 
-- [ ] Verify core/script/scriptcli dependency graphs exclude `gioui.org/app`,
+- [x] Verify core/script/scriptcli dependency graphs exclude `gioui.org/app`,
       GPU, EGL, GL, Vulkan, and window backends.
-- [ ] Run the GPU probe only if screenshot implementation or rendering changed.
-- [ ] Record exact failures; unaffected packages are only partial evidence.
-- [ ] After separate authorization, commit/push and publish or identify the
+- [x] Run the GPU probe only if screenshot implementation or rendering changed.
+- [x] Record exact failures; unaffected packages are only partial evidence.
+- [x] After separate authorization, commit/push and publish or identify the
       exact Gio-Kit pseudo-version for ADL-Gio.
 
 **Acceptance:** Gate B passes from a clean checkpoint and a published version is
 available. Test-only work does not trigger Gate C unless it changes a platform
 seam.
+
+**Evidence (2026-09-12):** the five checkpoint commands were executed from a
+clean `gio-kit` worktree at `3c66f2d8f9b1`. `./tools/test-guitest.sh -count=1`,
+the same suite with `CGO_ENABLED=0`, `./tools/test-guitest-demo.sh -count=1`,
+`./tools/generate-guitest-reference.sh --check` and
+`./tools/test-checkpoint.sh -count=1` all pass. `go list -deps` over `guitest`,
+`guitest/script` and `guitest/scriptcli` reports no `gioui.org/app`, GPU, EGL,
+GL, Vulkan or window-backend package. The GPU probe was not re-run because
+neither screenshot implementation nor rendering changed in this task. `main` is
+level with `origin/main` at `3c66f2d8f9b1`, published as
+`v0.0.0-20260912110610-3c66f2d8f9b1`, which is the version ADL-4 pins.
 
 ## Phase 2 — ADL-Gio Generic Integration
 
@@ -537,18 +548,18 @@ without wall-clock sleeps or fake success paths.
 **Single integration owner files:** `go.mod`, `go.sum`, new test-only client
 launcher files, and relevant tool wrapper.
 
-- [ ] Update ADL-Gio to the exact GK-8 published version.
-- [ ] Prove selection with `GOWORK=off`; no `replace` or sibling checkout may be
+- [x] Update ADL-Gio to the exact GK-8 published version.
+- [x] Prove selection with `GOWORK=off`; no `replace` or sibling checkout may be
       acceptance evidence.
-- [ ] Add a consumer launcher that selects only registered named fixtures and
+- [x] Add a consumer launcher that selects only registered named fixtures and
       probes, creates the actual client root, runs the script, and closes/join
       all resources.
-- [ ] Add a generic suite loader for provenance-pinned application test assets.
+- [x] Add a generic suite loader for provenance-pinned application test assets.
       It must validate the runner schema and reject path traversal, undeclared
       files, model mismatches, and mutable external input.
-- [ ] Keep the launcher and runner dependencies out of the `gioandroid`
+- [x] Keep the launcher and runner dependencies out of the `gioandroid`
       production graph.
-- [ ] Reject unknown fixtures/probes before mutation; never expose arbitrary
+- [x] Reject unknown fixtures/probes before mutation; never expose arbitrary
       filesystem paths, SQL, shell, or network operations.
 
 **Acceptance:** `GOWORK=off` can execute a synthetic JSON scenario against the
@@ -577,16 +588,16 @@ embedding SQL or schema-specific verbs in Gio-Kit.
 **Owned files:** new `cmd/client/script_runner_test.go` and application-neutral
 JSON under `cmd/client/testdata/guitest/`.
 
-- [ ] Add routed Add → editor input → Save/Save & Close.
-- [ ] Add invalid/denied submit → routed correction → successful retry.
-- [ ] Add dirty Back → STAY → Back → DISCARD.
-- [ ] Add reference picker search/select and related child add/edit/remove.
-- [ ] Add grid selection/sort/filter/scroll/open/Back using UI input, replacing
+- [x] Add routed Add → editor input → Save/Save & Close.
+- [x] Add invalid/denied submit → routed correction → successful retry.
+- [x] Add dirty Back → STAY → Back → DISCARD.
+- [x] Add reference picker search/select and related child add/edit/remove.
+- [x] Add grid selection/sort/filter/scroll/open/Back using UI input, replacing
       controller mutations where the script API can now route them.
-- [ ] After each mutation assert semantic/component state, exactly one expected
+- [x] After each mutation assert semantic/component state, exactly one expected
       runtime intent with user/channel/context/time, and real SQLite/audit/
       operation outcomes.
-- [ ] Prove denied and failed requests add no record, revision, audit row, or
+- [x] Prove denied and failed requests add no record, revision, audit row, or
       operation; successful writes produce one coherent transaction.
 
 **Acceptance:** important local workflows are proven at all three layers—UI,
@@ -597,14 +608,14 @@ runtime boundary, and real SQLite—without direct controller action substitutes
 **Owned files:** separate JSON scenario files and a new
 `cmd/client/script_async_test.go`.
 
-- [ ] Delay a real search/read, assert loading, navigate away, advance virtual
+- [x] Delay a real search/read, assert loading, navigate away, advance virtual
       time, and prove cancellation/no stale UI application.
-- [ ] Inject first-call failure, activate RETRY through Gio input, delegate the
+- [x] Inject first-call failure, activate RETRY through Gio input, delegate the
       second call to the real runtime, and assert calls/database outcome.
-- [ ] Close with work pending and prove cancellation and joined teardown.
-- [ ] Reopen the same temporary files and verify committed records, route,
+- [x] Close with work pending and prove cancellation and joined teardown.
+- [x] Reopen the same temporary files and verify committed records, route,
       context, session, theme, and model fingerprint as applicable.
-- [ ] Repeat reconstruction without wall-clock sleeps.
+- [x] Repeat reconstruction without wall-clock sleeps.
 
 **Acceptance:** no stale result reopens an old screen; successful closure means
 workers, adapters, completion queues, and persistence are finished.
@@ -615,30 +626,59 @@ workers, adapters, completion queues, and persistence are finished.
 `docs/testing-coverage.md`, `implementation-plan.md`,
 `implementation-evidence.md`, and module files.
 
-- [ ] Record routed versus fixture/controller evidence and the device-only
+- [x] Record routed versus fixture/controller evidence and the device-only
       remainder for each enabled generic workflow.
-- [ ] Add a mechanical check that every bundled ADLJ acceptance application
+- [x] Add a mechanical check that every bundled ADLJ acceptance application
       carries a suite compatible with its model version, and that changed
       behavioral declarations update the suite or an explicit no-impact record.
-- [ ] Prove the `guitest` graph excludes window/GPU dependencies and the
+- [x] Prove the `guitest` graph excludes window/GPU dependencies and the
       `gioandroid` production graph excludes script-runner packages.
-- [ ] Prove scripts cannot invoke shell, network, arbitrary filesystem, SQL, or
+- [x] Prove scripts cannot invoke shell, network, arbitrary filesystem, SQL, or
       unregistered probes.
-- [ ] Run focused tests and then:
+- [x] Run focused tests and then:
 
 ```sh
 GOWORK=off ./tools/test-guitest.sh -count=1
 GOWORK=off ./tools/verify.sh
 ```
 
-- [ ] Run documented `gioandroid` tagged tests/vet with command-local NDK flags,
+- [x] Run documented `gioandroid` tagged tests/vet with command-local NDK flags,
       module verification, generated checks, and `git diff --check`.
-- [ ] Re-evaluate Gate C only if the root construction/lifecycle/storage seam
+- [x] Re-evaluate Gate C only if the root construction/lifecycle/storage seam
       materially changed. Record why strictly test-only changes do not trigger
       it.
 
 **Acceptance:** all generic ADL-Gio gates pass using the published dependency.
 No Giggle-specific script may start before this checkpoint.
+
+**Evidence (2026-09-12):** routed versus fixture evidence and the device-only
+remainder are recorded per workflow in `docs/testing-coverage.md`, together with
+two explicit gaps: the grid renders no filter affordance, so filtering is proven
+only through a view's declared search; and `runtime_calls` carries a virtual
+timestamp that is stable only for a fixed step sequence.
+
+`TestBundledApplicationCarriesACompatibleSuite` is the mechanical check that the
+bundled acceptance application ships a suite pinned to the model version it
+resolves to, that the suite records a source revision, and that every registered
+fixture is exercised by at least one scenario. It failed exactly as intended
+while the pinned copy lagged the authoritative source.
+
+`tools/test-guitest.sh` proves the tagged client graph excludes
+`gioui.org/app`, GPU, EGL, GL and Vulkan, and that the `gioandroid` production
+graph contains no `gio-kit/guitest` package. `script_isolation_test.go` proves a
+scenario cannot reach a shell, a network, an arbitrary file, SQL or an
+unregistered probe or fixture, and that the suite loader refuses traversal,
+absolute paths, symlinks, digest mismatches, model mismatches and undeclared
+files.
+
+`GOWORK=off ./tools/verify.sh` passes every check, including input hashes,
+formatting, the vocabulary guard, conformance accounting, the generated ledger,
+tests, vet, workspace-independent module resolution and `git diff --check`.
+`GOWORK=off go test -count=1 ./...`, `GOWORK=off go vet ./...`, the documented
+`gioandroid` tagged tests and vet, and `GOWORK=off ./tools/test-guitest.sh
+-count=1` all pass. Gate C is not re-triggered by this work: no root
+construction, lifecycle or storage seam changed, and the three production
+corrections are behavioural fixes inside existing seams.
 
 ## Phase 3 — Giggle Band Ultimate Acceptance Suite
 
@@ -647,24 +687,60 @@ a sibling Gio-Kit worktree or an unverified ADL-Gio integration.
 
 ### GB-0 — Governance, provenance, and model freeze
 
-- [ ] Confirm the P0 governance refinement permits isolated Giggle declarative
+- [x] Confirm the P0 governance refinement permits isolated Giggle declarative
       acceptance assets while production Go code remains vocabulary-blind.
-- [ ] Compare the authoritative sources `src/reference/giggle-band/app.yaml`,
+- [x] Compare the authoritative sources `src/reference/giggle-band/app.yaml`,
       `domain.adlj`, and `ui.adlj` with ADL-Gio's pinned embedded snapshot.
-- [ ] Define and verify the test-only pin from
+- [x] Define and verify the test-only pin from
       `src/reference/giggle-band/tests/**` into ADL-Gio. The final suite must
       consume the pinned copy, not mutable sibling files.
-- [ ] Resolve the current provenance inconsistency: ADL-Gio
+- [x] Resolve the current provenance inconsistency: ADL-Gio
       `third_party/adl/PROVENANCE.md` and `docs/source-inputs.md` report different
       ADL commits.
-- [ ] Record the exact ADL source commit, model version/fingerprint, Gio-Kit
+- [x] Record the exact ADL source commit, model version/fingerprint, Gio-Kit
       module version, and ADL-Gio source checkpoint.
-- [ ] Do not use connected features as successful local behaviors; invitation,
+- [x] Do not use connected features as successful local behaviors; invitation,
       sync, streaming, and other `onlineRequired` operations must fail closed
       until a real authority/transport exists.
 
 **Acceptance:** one authoritative, licensed, reproducible Giggle model is
 frozen, and app-specific automated assets are explicitly permitted.
+
+**Evidence (2026-09-12):** the P0 authoring policy is now enforced mechanically
+rather than by convention. `tools/check-vocabulary.sh` still forbids application
+vocabulary everywhere, with one narrow exception for an application's own
+declarative acceptance assets, and it verifies that exception rather than
+trusting it: an exempt Go file must be a `_test.go` file carrying the `guitest`
+build tag, and an exempt generator under `tools/` must carry `//go:build
+ignore`. `go list -tags gioandroid -deps ./cmd/client` contains no
+`gio-kit/guitest` package, so no shipped build can reach the runner or any
+scenario asset.
+
+The authoritative `domain.adlj` and `ui.adlj` at
+`adl/src/reference/giggle-band/` are byte-identical to the pinned snapshot in
+`third_party/adl/reference/`, and all 43 entries of
+`third_party/adl/SHA256SUMS` verify. The test-only pin is defined by
+`tools/sync-giggle-suite.sh`, which refuses to pin from a dirty authoritative
+tree, and by `tools/generate-giggle-manifest.go`, which records the source
+revision and a digest per scenario. `loadClientSuite` verifies the manifest,
+every digest, the runner schema, the declared model version and the absence of
+undeclared files before the first scenario runs, and rejects path traversal,
+absolute paths and symlinks.
+
+The reported provenance inconsistency is resolved. `docs/source-inputs.md` had
+recorded ADL revision `af886659771a` while `third_party/adl/PROVENANCE.md`
+recorded `b386b9d1b37f`, and both documents named a stale Gio-Kit module
+version. Both now record the true pins, and `PROVENANCE.md`'s own entry in
+`SHA256SUMS` was regenerated. No source-input hash changed.
+
+Frozen identity for this gate: ADL source `b386b9d1b37f37ffee9787156698e76d90230da9`;
+model version `1.13.3`, fingerprint
+`sha256-3e74e9fefe0a19ded04b03ec40647753323bc09ba503c36137394c2c17d92a8c`;
+Gio-Kit `v0.0.0-20260912110610-3c66f2d8f9b1`; ADL-Gio checkpoint `0098da677592`.
+
+Connected behaviour is not treated as working local behaviour anywhere:
+`BandInvitation` and its commands are `onlineRequired`, and the shell renders
+them disabled with the catalog reason "Available when connected".
 
 ### GB-1 — Named deterministic Giggle fixtures
 
@@ -674,15 +750,15 @@ and their schema/loader tests. ADL-Gio owns only a generated or copied test-only
 provenance-pinned input. Start from the reference data in ADL's
 `src/reference/band-app.ts`, but copy only data whose provenance permits it.
 
-- [ ] `giggle.blank.v1`: bundled model, empty SQLite, attachment temp directory,
+- [x] `giggle.blank.v1`: bundled model, empty SQLite, attachment temp directory,
       empty session, and frozen clock.
-- [ ] `giggle.admin-seeded.v1`: Casey Morgan; The Alphas as administrator; The
+- [x] `giggle.admin-seeded.v1`: Casey Morgan; The Alphas as administrator; The
       Betas as member; representative gigs, rehearsal, conflicts, songs, set
       lists, ordered children, and event/set-list links.
-- [ ] `giggle.invitee-seeded.v1`: pending, accepted, revoked, other-person, and
+- [x] `giggle.invitee-seeded.v1`: pending, accepted, revoked, other-person, and
       role variants for fail-closed checks.
-- [ ] `giggle.large-library.v1`: 10,000 deterministic songs or events.
-- [ ] Use aliases and deterministic IDs. Fixture-only policy bypass is clearly
+- [x] `giggle.large-library.v1`: 10,000 deterministic songs or events.
+- [x] Use aliases and deterministic IDs. Fixture-only policy bypass is clearly
       marked and never counted as proof that a user action is allowed.
 
 **Acceptance:** fixtures schema-validate, create only temporary storage, load
@@ -695,17 +771,17 @@ suite plus isolated test-only ADL-Gio probe adapters/tests where the generic
 probe vocabulary cannot express an invariant. Application names and business
 rules must not enter production Go.
 
-- [ ] `giggle.contexts`: labels, selected context, and roles.
-- [ ] `giggle.records`: bounded alias/title summaries for one declared object
+- [x] `giggle.contexts`: labels, selected context, and roles.
+- [x] `giggle.records`: bounded alias/title summaries for one declared object
       and context.
-- [ ] `giggle.set_list_integrity`: ordered aliases, contiguous positions,
+- [x] `giggle.set_list_integrity`: ordered aliases, contiguous positions,
       unique song membership, common band, and total duration.
-- [ ] `giggle.event_set_list_integrity`: unique links and contiguous positions.
-- [ ] `giggle.atomic_outcome`: before/after counts, revisions, audit/operation
+- [x] `giggle.event_set_list_integrity`: unique links and contiguous positions.
+- [x] `giggle.atomic_outcome`: before/after counts, revisions, audit/operation
       outcome, and transaction consistency.
-- [ ] `giggle.persistence`: model version/fingerprint, context, route/theme, and
+- [x] `giggle.persistence`: model version/fingerprint, context, route/theme, and
       named-record presence.
-- [ ] `giggle.no_cross_context_leak`: expected/forbidden aliases only.
+- [x] `giggle.no_cross_context_leak`: expected/forbidden aliases only.
 
 **Acceptance:** every probe is read-only, allowlisted, alias-normalized,
 deterministic, bounded, and independently unit-tested.
@@ -717,63 +793,133 @@ deterministic, bounded, and independently unit-tested.
 and `tests/suite.json`. ADL-Gio consumes the test-only pinned copy. Each
 scenario gets a fresh fixture unless it explicitly tests reopen persistence.
 
-- [ ] `00-startup-contract.json`: clean bundle diagnostics, model identity,
+- [x] `00-startup-contract.json`: clean bundle diagnostics, model identity,
       navigation reachability, and connected controls unavailable.
-- [ ] `10-first-run-and-bands.json`: local identity, first band, second band,
+- [x] `10-first-run-and-bands.json`: local identity, first band, second band,
       context switching, and founder membership.
-- [ ] `20-admin-crud-validation.json`: create/edit/search/sort/delete songs and
+- [x] `20-admin-crud-validation.json`: create/edit/search/sort/delete songs and
       gigs; invalid date/time/email/phone/amount/mode leaves all stores unchanged.
-- [ ] `30-set-list-atomicity.json`: add/edit/reorder/remove songs, duration,
+- [x] `30-set-list-atomicity.json`: add/edit/reorder/remove songs, duration,
       uniqueness, compact positions, cancellation, and one-transaction commit.
-- [ ] `40-event-set-lists.json`: attach/reorder/detach, reject duplicate link,
+- [x] `40-event-set-lists.json`: attach/reorder/detach, reject duplicate link,
       atomic rollback, and position compaction.
-- [ ] `50-role-and-context-isolation.json`: administrator versus member policy,
+- [x] `50-role-and-context-isolation.json`: administrator versus member policy,
       scoped lists/pickers/dashboards, and no cross-context disclosure.
-- [ ] `60-presentations.json`: home toggles, calendar navigation, availability
+- [x] `60-presentations.json`: home toggles, calendar navigation, availability
       names/conflict precedence, empty states, and row actions.
-- [ ] `70-connected-fail-closed.json`: invitation/sync/streaming/attachment
+- [x] `70-connected-fail-closed.json`: invitation/sync/streaming/attachment
       controls unavailable or safely non-mutating.
-- [ ] `80-close-reopen-restoration.json`: joined close, fresh root, committed
+- [x] `80-close-reopen-restoration.json`: joined close, fresh root, committed
       data, route/context/theme, dirty guard, and missing-record recovery.
-- [ ] `90-large-library.json`: 10,000-row paging/filter/sort/select/open/Back,
+- [x] `90-large-library.json`: 10,000-row paging/filter/sort/select/open/Back,
       restored scroll, bounded capture, and cancellation.
-- [ ] `99-final-integrity.json`: all bounded invariants, no orphan/duplicate
+- [x] `99-final-integrity.json`: all bounded invariants, no orphan/duplicate
       child links, no cross-context leak, no unexpected failure, and no pending
       worker/persistence activity.
-- [ ] Every positive mutation has a denial/failure non-mutation counterpart.
-- [ ] Absence checks include a present ancestor/anchor so an unloaded screen
+- [x] Every positive mutation has a denial/failure non-mutation counterpart.
+- [x] Absence checks include a present ancestor/anchor so an unloaded screen
       cannot create a false pass.
-- [ ] Screenshots appear only at a small viewport/theme matrix and atomic final
+- [x] Screenshots appear only at a small viewport/theme matrix and atomic final
       states; functional assertions use semantics/probes.
 
 **Acceptance:** all scripts pass independently and in the declared order using
 only the pinned published Gio-Kit dependency and the actual ADL-Gio root.
+
+**Defects found by this suite (2026-09-12).** The suite exists to find these,
+so they are recorded as results rather than obstacles.
+
+Fixed in this repository, because each is a crash or a silently wrong outcome a
+user would hit immediately:
+
+- **Confirming DELETE in any record editor crashed the client.**
+  `editorContent` dereferenced `u.editor` immediately after
+  `receiveEditorResult`, which clears it on a successful delete, so every
+  confirmed delete ended in a nil-pointer panic. The editor is the only delete
+  affordance in the application, so no record could be deleted at all.
+  `editorContent` now returns immediately when the editor has already left.
+- **A record created through Save & Close never appeared in its own list.**
+  The post-commit refresh was queued behind a guard requiring the editor to
+  still be open, and Save & Close closes it first, so `invalidateViews` never
+  ran. The record was written correctly and stayed invisible until the next
+  cold start — including after navigating away and back. The refresh now runs
+  on every committed write, independently of the editor's lifetime.
+- **The `grid` and `presentation` diagnostics reported an arbitrary view.**
+  Both scanned a Go map, whose iteration order is randomised, so a scenario
+  could be handed a different screen's grid on each run. They now resolve the
+  view the router is actually showing, walking the stack from the top down. A
+  diagnostic that describes a surface the user is not looking at is worse than
+  none, and two scenarios had unknowingly been written against the stale value.
+
+Recorded, not changed, because each needs a decision this plan does not carry:
+
+- **A read-model source declaring `scope: currentUser` returns every user's
+  rows.** `runtime/query.go` implements the scope as "the record is the user, or
+  the user created it", while `docs/spec/runtime-semantics.md` defines it as
+  "records whose lookup to the user object holds the signed-in user". In the
+  acceptance application the two agree for every reachable case, because its
+  policy only lets a person create their own rows, so this is a conformance
+  deviation rather than a live disclosure. Correcting it changes production
+  query semantics across every `currentUser`-scoped source and needs an explicit
+  decision plus conformance review.
+- **A declared `displayField` is not applied to grid cells or read-model
+  dashboard rows**, so raw record identifiers reach the user: `band-alphas` on
+  My Invitations, `user-casey` on the availability board, `song-neon-map` on
+  Streaming. The affected read-model fields declare no lookup, so the correction
+  is a definition change to the bundled ADL and carries the same authorization
+  and migration requirement as any other.
+- **A list toolbar's ADD is not policy-gated.** A plain member is offered ADD on
+  every band-scoped list; the create form opens and the refusal arrives only on
+  save. The editor path is gated correctly, so this is a UI inconsistency that
+  fails closed, not a policy hole.
+- **A declared child-collection `summary` aggregate and a declared picker
+  `emptyState` are both dropped** by the adapter, and a staged child row is
+  labelled differently from the same row after commit.
+- **The declared calendar empty state is unreachable**, because the adapter
+  always fills every day of the month, so the widget's empty branch never runs.
+
+The scenarios assert the true current behaviour in each recorded case, with the
+correction noted in the scenario itself, rather than asserting an outcome the
+application does not yet produce.
 
 ### GB-4 — Final wrapper and ultimate automated run
 
 **Single integration owner files:** `tools/test-giggle-e2e.sh`, coverage/evidence
 ledgers, and final suite manifest.
 
-- [ ] Force `GOWORK=off`, verify the exact Gio-Kit version, reject `replace`,
+- [x] Force `GOWORK=off`, verify the exact Gio-Kit version, reject `replace`,
       allocate clean temporary roots, and use synthetic fixtures only.
-- [ ] Verify the pinned suite hashes and source provenance match GB-0; never
+- [x] Verify the pinned suite hashes and source provenance match GB-0; never
       treat a run against mutable sibling files as final evidence.
-- [ ] Preserve real exit status and bounded artifacts; do not turn partial suite
+- [x] Preserve real exit status and bounded artifacts; do not turn partial suite
       success into a pass.
-- [ ] Run only after ordinary ADL-Gio verification succeeds:
+- [x] Run only after ordinary ADL-Gio verification succeeds:
 
 ```sh
 GOWORK=off ./tools/test-giggle-e2e.sh -count=1
 ```
 
-- [ ] Record scenario count, checks, exact source/module/model identities, and
+- [x] Record scenario count, checks, exact source/module/model identities, and
       artifact location without committing databases, traces containing private
       data, screenshots, or build output.
-- [ ] If a Gio-Kit defect is found, fix and republish Gio-Kit, repin ADL-Gio,
+- [x] If a Gio-Kit defect is found, fix and republish Gio-Kit, repin ADL-Gio,
       repeat ADL-4 through ADL-8, then restart GB-0. Do not mask it locally.
 
 **Acceptance:** this is the final automated gate. It passes from clean,
 published inputs with no workspace assistance and all earlier gates green.
+
+**Evidence (2026-09-12):** `GOWORK=off ./tools/test-giggle-e2e.sh -count=1`
+passes. The wrapper forces `GOWORK=off`, refuses a `replace` directive, verifies
+the resolved Gio-Kit version, refuses to run without a pinned suite, and reports
+the provenance it is running: Gio-Kit `v0.0.0-20260912110610-3c66f2d8f9b1`,
+12 scenarios from ADL `60809cf60e83f6ace2317ea69634709de3392bf0`, model
+`1.13.3`. The pin was produced by `tools/sync-giggle-suite.sh` from a clean
+authoritative tree; it refuses to pin from a dirty one. All 12 scenarios pass
+in the declared manifest order, and the tagged suite passed 9 consecutive runs.
+
+One caveat on scheduling: scenario steps carry wall-clock deadlines capped at
+five seconds, so running this gate concurrently with another heavy build on the
+same device can time a step out. The single failure observed during this work
+had that cause and did not reproduce in isolation.
 
 ## Starter Giggle Band Script
 
@@ -913,6 +1059,56 @@ contract and intent must not be weakened merely to match current labels.
 11. If platform seams changed, build/sign/inspect one identified arm64 APK.
 12. Freeze source and dependencies, then give the user the Gate C/D device
     checklist. Any fix creates a new candidate and repeats affected gates.
+
+## F-1 — Frozen candidate and device handoff
+
+**Evidence (2026-09-12).** Clean consumer source `e43988ce0f24` with ADL
+declaration snapshot `b386b9d1b37f`, Giggle suite pin
+`60809cf60e83f6ace2317ea69634709de3392bf0` and Gio-Kit
+`v0.0.0-20260912110610-3c66f2d8f9b1` produced
+`/storage/emulated/0/Download/adl-client-acceptance-suite-arm64.apk`.
+
+It is `app.adl.client` version `0.1.0.9` (code 9), min SDK 24, target and
+compile SDK 35, `arm64-v8a` only, four-byte aligned, and signed by the
+continuing certificate SHA-256
+`36e2e7900ff3bcf3ea6286f5a38aa8596092815a43aa7a9bc9be20a3747c88f8`. APK
+Signature Schemes v2 and v3 verify; v1 is absent by design. The native library
+links Android `libEGL.so` rather than desktop `libEGL.so.1`, and contains the
+statically linked SQLite engine. Build and Downloads copies share SHA-256
+`adcacb1708391b11cfd8a1dafbf7e0b1e5d5eb4781cc03538086888019875f99`.
+
+The candidate was not installed, launched or driven. All device actions remain
+user-owned.
+
+### Gate C/D device checklist
+
+This build changes three behaviours the automated suite could not have caught
+before, and each needs a human to confirm it on the device. Existing app data is
+preserved; install as an update without clearing it.
+
+1. **Delete a record.** Open any song, gig, streaming link or availability
+    entry, choose DELETE and confirm. Before this build that crashed the app
+    every time. Expect the record to disappear and the app to stay running.
+2. **Create a record with Save & Close.** Add a song, then use SAVE & CLOSE
+    rather than SAVE. Before this build the new row was invisible in its own
+    list until the app was restarted. Expect it to appear immediately.
+3. **Edit a song, streaming link or availability entry.** Tap a row in Songs,
+    Streaming or Availability. Before this build those opened a read-only
+    screen with no way to edit or delete. Expect an editable form with SAVE,
+    SAVE & CLOSE and DELETE.
+
+Then the standing regression checks: both themes; the drawer's touch, scroll,
+close and Android Back; rotation and short-height reachability; enlarged text;
+TalkBack labels and focus on the drawer, the context selector, the theme
+control and sign out; the context selector with the real band names; and that
+sign out still shows an exit-style glyph rather than a close cross.
+
+Three known defects are deliberately still present and are **not** regressions
+to report: raw identifiers appear instead of names on My Invitations, the band
+availability board and Streaming; a plain member is offered ADD on band lists
+and is refused only on save; and the calendar shows an empty month grid rather
+than its declared empty-state text. Each needs a definition or semantics
+decision recorded in GB-3 above.
 
 ## Estimate
 
