@@ -26,7 +26,8 @@ The current Gio baseline is `gioui.org v0.10.2`.
 
 The window-free testing framework supports routed input, semantic selectors,
 bounded JSON diagnostics, component snapshots, and optional headless PNGs.
-See the [developer/LLM guide](docs/guitest.md) and
+See the [developer/LLM guide](docs/guitest.md), the
+[declarative script guide](docs/guitest-script.md), and
 [delivery progress](test-framework-progress.md) for available APIs and pending
 device gates.
 

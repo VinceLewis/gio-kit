@@ -72,9 +72,20 @@ databases, logs, and action-session files must remain outside commits.
 
 ## Coding and Test Standards
 
-For testing-framework implementation or use, read `docs/guitest.md` and
-`test-framework-progress.md`. Keep the ledger current at checkpoints and before
-pausing so another session can resume without repeating completed work.
+For testing-framework implementation or use, read `docs/guitest.md`,
+`test-framework-progress.md`, and `gio-playwright.md`. The last file is the
+mandatory tracked plan for the declarative script runner, ADL-Gio integration,
+and per-ADLJ-application suites. Keep its identical copy at
+`../adl-gio/gio-playwright.md` synchronized; do not treat proposed APIs as
+implemented. Keep the ledger current at checkpoints and before pausing so
+another session can resume without repeating completed work.
+
+Once the runner's v1 contract is published, an ADLJ application must maintain
+its fixtures, bounded probe declarations, and routed UI scenarios beside its
+authoritative declarations while the application is authored or changed. The
+generic Gio runner remains independent of application vocabulary and consumes
+only a compiled consumer factory plus allowlisted fixtures/probes. Application
+suites complement rather than replace Android device gates.
 
 Use idiomatic Go and `gofmt`. Keep Gio layout functions small; retain widget and interaction state across frames and explicitly invalidate when external state changes require redraw. Never block the frame loop on data fetching. Make async completion safe against stale requests and disposed screens.
 

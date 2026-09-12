@@ -1,0 +1,272 @@
+{
+  "$defs": {
+    "artifact": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "pattern": "^step-[0-4][0-9]{2}-(?:failure\\.json|capture\\.json)$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "pattern": "^step-[0-4][0-9]{2}-capture-unredacted\\.png$",
+              "type": "string"
+            },
+            "unredacted": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "unredacted"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "duration": {
+      "maxLength": 2048,
+      "pattern": "^(?:0|\\+?(?:(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:ns|us|µs|μs|ms|s|m|h))+)$",
+      "type": "string"
+    },
+    "step": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifacts": {
+              "items": {
+                "$ref": "#/$defs/artifact"
+              },
+              "maxItems": 3,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "attempts": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "frameAfter": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "frameBefore": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operation": {
+              "enum": [
+                "tap",
+                "doubleTap",
+                "longPress",
+                "press",
+                "move",
+                "release",
+                "cancelPointer",
+                "drag",
+                "scroll",
+                "focus",
+                "type",
+                "key",
+                "back",
+                "clearFocus",
+                "setSelection",
+                "setComposition",
+                "edit",
+                "resize",
+                "advance",
+                "settle",
+                "expect",
+                "expectSnapshot",
+                "expectProbe",
+                "capture"
+              ],
+              "type": "string"
+            },
+            "status": {
+              "const": "passed",
+              "type": "string"
+            },
+            "stepId": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "stepIndex": {
+              "maximum": 499,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "virtualAfter": {
+              "$ref": "#/$defs/duration"
+            },
+            "virtualBefore": {
+              "$ref": "#/$defs/duration"
+            }
+          },
+          "required": [
+            "stepIndex",
+            "operation",
+            "status",
+            "attempts",
+            "frameBefore",
+            "frameAfter",
+            "virtualBefore",
+            "virtualAfter"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifacts": {
+              "items": {
+                "$ref": "#/$defs/artifact"
+              },
+              "maxItems": 3,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "attempts": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "code": {
+              "enum": [
+                "invalid_script",
+                "timeout",
+                "cancelled",
+                "not_found",
+                "ambiguous",
+                "not_interactable",
+                "assertion_failed",
+                "probe_error",
+                "frame_limit",
+                "closed",
+                "artifact_error",
+                "internal"
+              ],
+              "type": "string"
+            },
+            "frameAfter": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "frameBefore": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operation": {
+              "enum": [
+                "tap",
+                "doubleTap",
+                "longPress",
+                "press",
+                "move",
+                "release",
+                "cancelPointer",
+                "drag",
+                "scroll",
+                "focus",
+                "type",
+                "key",
+                "back",
+                "clearFocus",
+                "setSelection",
+                "setComposition",
+                "edit",
+                "resize",
+                "advance",
+                "settle",
+                "expect",
+                "expectSnapshot",
+                "expectProbe",
+                "capture"
+              ],
+              "type": "string"
+            },
+            "status": {
+              "const": "failed",
+              "type": "string"
+            },
+            "stepId": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "stepIndex": {
+              "maximum": 499,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "virtualAfter": {
+              "$ref": "#/$defs/duration"
+            },
+            "virtualBefore": {
+              "$ref": "#/$defs/duration"
+            }
+          },
+          "required": [
+            "stepIndex",
+            "operation",
+            "status",
+            "attempts",
+            "frameBefore",
+            "frameAfter",
+            "virtualBefore",
+            "virtualAfter",
+            "code"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/VinceLewis/gio-kit/guitest/script/trace-schema-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "maxItems": 1003,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "maxItems": 500,
+      "type": "array"
+    },
+    "version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "status",
+    "steps"
+  ],
+  "title": "Gio test trace, version 1",
+  "type": "object"
+}

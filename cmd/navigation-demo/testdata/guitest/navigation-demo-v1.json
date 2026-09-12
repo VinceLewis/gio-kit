@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "name": "navigation-demo-real-root",
+  "fixture": "navigation-demo.v1",
+  "defaults": {
+    "timeout": "5s"
+  },
+  "steps": [
+    {
+      "id": "startup-delay-pending",
+      "op": "expectProbe",
+      "probe": "startup.pending",
+      "args": {},
+      "equals": true
+    },
+    {
+      "id": "startup-loading",
+      "op": "expectSnapshot",
+      "component": "grid",
+      "pointer": "/loading",
+      "equals": true
+    },
+    {
+      "id": "finish-startup-delay",
+      "op": "advance",
+      "duration": "350ms"
+    },
+    {
+      "id": "startup-settled",
+      "op": "settle"
+    },
+    {
+      "id": "sqlite-grid-ready",
+      "op": "expectSnapshot",
+      "component": "grid",
+      "pointer": "/state",
+      "equals": "ready"
+    },
+    {
+      "id": "sqlite-row-count",
+      "op": "expectSnapshot",
+      "component": "grid",
+      "pointer": "/totalRows",
+      "equals": 10000
+    },
+    {
+      "id": "open-restored-incident",
+      "op": "tap",
+      "selector": {
+        "label": "DEEP LINK"
+      }
+    },
+    {
+      "id": "form-route",
+      "op": "expectSnapshot",
+      "component": "router",
+      "pointer": "/route/name",
+      "equals": "incident.form"
+    },
+    {
+      "id": "form-clean",
+      "op": "expectSnapshot",
+      "component": "form",
+      "pointer": "/dirty",
+      "equals": false
+    },
+    {
+      "id": "edit-description",
+      "op": "type",
+      "selector": {
+        "all": [
+          { "role": "editor" },
+          { "name": "Short description" }
+        ]
+      },
+      "text": " modified"
+    },
+    {
+      "id": "form-dirty",
+      "op": "expectSnapshot",
+      "component": "form",
+      "pointer": "/dirty",
+      "equals": true
+    },
+    {
+      "id": "guarded-back-stay",
+      "op": "back"
+    },
+    {
+      "id": "stay",
+      "op": "tap",
+      "selector": {
+        "label": "STAY"
+      }
+    },
+    {
+      "id": "stay-keeps-form",
+      "op": "expectSnapshot",
+      "component": "router",
+      "pointer": "/route/name",
+      "equals": "incident.form"
+    },
+    {
+      "id": "stay-keeps-dirty-state",
+      "op": "expectSnapshot",
+      "component": "form",
+      "pointer": "/dirty",
+      "equals": true
+    },
+    {
+      "id": "guarded-back-discard",
+      "op": "back"
+    },
+    {
+      "id": "discard",
+      "op": "tap",
+      "selector": {
+        "label": "DISCARD"
+      }
+    },
+    {
+      "id": "list-route-restored",
+      "op": "expectSnapshot",
+      "component": "router",
+      "pointer": "/route/name",
+      "equals": "incident.list"
+    },
+    {
+      "id": "open-sqlite-grid",
+      "op": "tap",
+      "selector": {
+        "label": "OPEN SQLITE GRID"
+      }
+    },
+    {
+      "id": "grid-route",
+      "op": "expectSnapshot",
+      "component": "router",
+      "pointer": "/route/name",
+      "equals": "incident.grid"
+    },
+    {
+      "id": "open-first-grid-row",
+      "op": "tap",
+      "selector": {
+        "label": "Open INC0000001"
+      }
+    },
+    {
+      "id": "grid-row-form-route",
+      "op": "expectSnapshot",
+      "component": "router",
+      "pointer": "/route/name",
+      "equals": "incident.form"
+    },
+    {
+      "id": "capture-final-state",
+      "op": "capture",
+      "name": "final-state",
+      "components": ["router", "form", "grid"],
+      "screenshot": "optional"
+    },
+    {
+      "id": "persist-final-route",
+      "op": "settle"
+    }
+  ]
+}

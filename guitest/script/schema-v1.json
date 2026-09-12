@@ -1,0 +1,1077 @@
+{
+  "$defs": {
+    "defaults": {
+      "additionalProperties": false,
+      "properties": {
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "type": "object"
+    },
+    "duration": {
+      "maxLength": 2048,
+      "pattern": "^(?:0|\\+?(?:(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:ns|us|µs|μs|ms|s|m|h))+)$",
+      "type": "string"
+    },
+    "key": {
+      "additionalProperties": false,
+      "properties": {
+        "modifiers": {
+          "items": {
+            "enum": [
+              "shift",
+              "control",
+              "alt",
+              "super",
+              "command"
+            ],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "name": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "metric": {
+      "additionalProperties": false,
+      "properties": {
+        "pxPerDp": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "pxPerSp": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "pxPerDp",
+        "pxPerSp"
+      ],
+      "type": "object"
+    },
+    "point": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "range": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "selector": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "maxLength": 2048,
+              "type": "string"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "maxLength": 2048,
+              "type": "string"
+            }
+          },
+          "required": [
+            "description"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 2048,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "maxLength": 2048,
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "enum": [
+                "unknown",
+                "button",
+                "checkbox",
+                "editor",
+                "radio",
+                "switch"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "role"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "selected": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "selected"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "items": {
+                "$ref": "#/$defs/selector"
+              },
+              "maxItems": 64,
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "all"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "within": {
+              "additionalProperties": false,
+              "properties": {
+                "ancestor": {
+                  "$ref": "#/$defs/selector"
+                },
+                "target": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "target",
+                "ancestor"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "within"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "containing": {
+              "additionalProperties": false,
+              "properties": {
+                "descendant": {
+                  "$ref": "#/$defs/selector"
+                },
+                "target": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "target",
+                "descendant"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "containing"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "nth": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "selector",
+                "index"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "nth"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "size": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "width": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "step": {
+      "oneOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "tap"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "doubleTap"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "press"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "focus"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "duration": {
+                  "$ref": "#/$defs/duration"
+                },
+                "op": {
+                  "const": "longPress"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector",
+                "duration"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "move"
+                },
+                "position": {
+                  "$ref": "#/$defs/point"
+                }
+              },
+              "required": [
+                "op",
+                "position"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "release"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "cancelPointer"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "back"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "clearFocus"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "settle"
+                }
+              },
+              "required": [
+                "op"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "delta": {
+                  "$ref": "#/$defs/point"
+                },
+                "duration": {
+                  "$ref": "#/$defs/duration"
+                },
+                "op": {
+                  "const": "drag"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector",
+                "delta",
+                "duration"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "delta": {
+                  "$ref": "#/$defs/point"
+                },
+                "op": {
+                  "const": "scroll"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector",
+                "delta"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "type"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                },
+                "text": {
+                  "maxLength": 2048,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op",
+                "selector",
+                "text"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/key"
+                },
+                "op": {
+                  "const": "key"
+                }
+              },
+              "required": [
+                "op",
+                "key"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "setSelection"
+                },
+                "range": {
+                  "$ref": "#/$defs/range"
+                }
+              },
+              "required": [
+                "op",
+                "range"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "setComposition"
+                },
+                "range": {
+                  "$ref": "#/$defs/range"
+                }
+              },
+              "required": [
+                "op",
+                "range"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "edit"
+                },
+                "range": {
+                  "$ref": "#/$defs/range"
+                },
+                "text": {
+                  "maxLength": 2048,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op",
+                "range",
+                "text"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "metric": {
+                  "$ref": "#/$defs/metric"
+                },
+                "op": {
+                  "const": "resize"
+                },
+                "size": {
+                  "$ref": "#/$defs/size"
+                }
+              },
+              "required": [
+                "op",
+                "size",
+                "metric"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "duration": {
+                  "$ref": "#/$defs/duration"
+                },
+                "op": {
+                  "const": "advance"
+                }
+              },
+              "required": [
+                "op",
+                "duration"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "op": {
+                  "const": "expect"
+                },
+                "selector": {
+                  "$ref": "#/$defs/selector"
+                }
+              },
+              "required": [
+                "op",
+                "selector"
+              ],
+              "type": "object"
+            }
+          ],
+          "oneOf": [
+            {
+              "properties": {
+                "count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "expect": {
+                  "const": "count"
+                }
+              },
+              "required": [
+                "expect",
+                "count"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "expect": {
+                  "enum": [
+                    "present",
+                    "absent",
+                    "enabled",
+                    "disabled",
+                    "selected",
+                    "unselected",
+                    "viewportVisible",
+                    "viewportPartiallyVisible",
+                    "viewportClipped"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "expect"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "component": {
+                  "maxLength": 2048,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "op": {
+                  "const": "expectSnapshot"
+                },
+                "pointer": {
+                  "maxLength": 2048,
+                  "pattern": "^(?:|(?:/(?:[^~/]|~[01])*)*)$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op",
+                "component",
+                "pointer"
+              ],
+              "type": "object"
+            }
+          ],
+          "oneOf": [
+            {
+              "properties": {
+                "equals": {}
+              },
+              "required": [
+                "equals"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "notEquals": {}
+              },
+              "required": [
+                "notEquals"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "exists": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "exists"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "args": {
+                  "type": "object"
+                },
+                "equals": {},
+                "op": {
+                  "const": "expectProbe"
+                },
+                "probe": {
+                  "maxLength": 2048,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op",
+                "probe",
+                "equals"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/stepBase"
+            },
+            {
+              "properties": {
+                "components": {
+                  "items": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 64,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "name": {
+                  "maxLength": 2048,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "op": {
+                  "const": "capture"
+                },
+                "screenshot": {
+                  "enum": [
+                    "never",
+                    "optional",
+                    "required"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "op",
+                "name"
+              ],
+              "type": "object"
+            }
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "stepBase": {
+      "properties": {
+        "id": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "tap",
+            "doubleTap",
+            "longPress",
+            "press",
+            "move",
+            "release",
+            "cancelPointer",
+            "drag",
+            "scroll",
+            "focus",
+            "type",
+            "key",
+            "back",
+            "clearFocus",
+            "setSelection",
+            "setComposition",
+            "edit",
+            "resize",
+            "advance",
+            "settle",
+            "expect",
+            "expectSnapshot",
+            "expectProbe",
+            "capture"
+          ],
+          "type": "string"
+        },
+        "timeout": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/VinceLewis/gio-kit/guitest/script/schema-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "fixture": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "maxItems": 500,
+      "type": "array"
+    },
+    "version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "steps"
+  ],
+  "title": "Gio test script, version 1",
+  "type": "object"
+}

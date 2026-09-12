@@ -12,6 +12,18 @@ const SchemaVersion = 1
 VARIABLES
 
 var (
+	// ErrTargetDisabled means the target or an ancestor used for input is
+	// explicitly disabled.
+	ErrTargetDisabled = errors.New("guitest: target is disabled")
+	// ErrTargetOffViewport means the actionable semantic bounds have no
+	// intersection with the viewport. It does not make a stronger claim about
+	// ancestor clipping, coverage, or occlusion.
+	ErrTargetOffViewport = errors.New("guitest: target is off viewport")
+	// ErrTargetCapabilityMismatch means neither the selected semantic node nor
+	// its ancestors expose the requested input capability.
+	ErrTargetCapabilityMismatch = errors.New("guitest: target capability mismatch")
+)
+var (
 	ErrClosed     = errors.New("guitest: driver closed")
 	ErrFrameLimit = errors.New("guitest: frame limit exceeded")
 )
@@ -96,6 +108,18 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error)
     Unknown clip, coverage and focus facts are explicit. IDs without bindings
     are deterministic tree indices, not identities stable across different
     trees.
+
+func (d *Driver) CheckTarget(selector Selector, capability TargetCapability) error
+    CheckTarget checks whether selector currently resolves to exactly one target
+    capable of receiving the requested kind of input. It reads the last frame
+    only: it does not lay out a frame, change focus, queue input, or mutate
+    widget state.
+
+    Readiness is delegated to the same target resolution used by Driver actions.
+    ErrNotFound, ErrAmbiguous, and ErrClosed are returned unchanged. Disabled,
+    off-viewport, and capability-mismatch results also wrap ErrNotInteractable.
+    Other failures to prove a usable hit point remain ErrNotInteractable because
+    Gio's public semantics do not establish occlusion or effective clipping.
 
 func (d *Driver) ClearFocus() error
     ClearFocus models platform focus loss without requiring an app.Window.
@@ -355,6 +379,15 @@ func Within(selector, ancestor Selector) Selector
     Within matches descendants, excluding the ancestor itself. The ancestry is
     always evaluated against the current frame, including after virtualization.
 
+type TargetCapability uint8
+    TargetCapability identifies the input behavior CheckTarget must be able to
+    route to a semantic target.
+
+const (
+	TargetTap TargetCapability = iota + 1
+	TargetEdit
+	TargetScroll
+)
 package diagnostic // import "github.com/VinceLewis/gio-kit/diagnostic"
 
 Package diagnostic defines bounded, application-independent component
@@ -439,4 +472,551 @@ type FailureReporter interface {
 	Failed() bool
 	Logf(string, ...any)
 }
+
+package script // import "github.com/VinceLewis/gio-kit/guitest/script"
+
+Package script defines and executes bounded, versioned JSON scenarios over Gio's
+in-process guitest driver.
+
+CONSTANTS
+
+const (
+	DefaultMaxArtifactFileBytes  = 4 << 20
+	DefaultMaxArtifactTotalBytes = 16 << 20
+	MaximumArtifactFiles         = DefaultMaxSteps*2 + 3
+	MaximumScreenshotPixels      = 64 << 20
+)
+const (
+	DefaultMaxProbeBytes      = 64 << 10
+	DefaultMaxJSONNumberBytes = 128
+)
+const (
+	Version              = 1
+	DefaultMaxInput      = 1 << 20
+	DefaultMaxSteps      = 500
+	DefaultSelectorDepth = 16
+	DefaultSelectorTerms = 64
+	DefaultMaxString     = 2 << 10
+	DefaultStepTimeout   = 2 * time.Second
+	MaximumStepTimeout   = 5 * time.Second
+	DefaultJSONDepth     = 16
+	DefaultJSONValues    = 4096
+)
+const TraceVersion = 1
+    TraceVersion identifies the stable trace artifact format.
+
+
+VARIABLES
+
+var (
+	ErrArtifact              = errors.New("guitest/script: artifact error")
+	ErrScreenshotUnavailable = errors.New("guitest/script: screenshot unavailable")
+)
+var (
+	ErrAssertion = errors.New("guitest/script: assertion failed")
+	ErrProbe     = errors.New("guitest/script: probe failed")
+	ErrInternal  = errors.New("guitest/script: internal error")
+)
+var ErrInvalidScript = errors.New("guitest/script: invalid script")
+var ErrInvalidTrace = errors.New("script: invalid trace")
+    ErrInvalidTrace is returned when a trace violates the v1 trace contract.
+
+var ErrJSONPointer = errors.New("guitest/script: invalid JSON Pointer")
+
+FUNCTIONS
+
+func CompileSelector(selector Selector) (guitest.Selector, error)
+    CompileSelector validates and compiles a version-1 selector AST into the
+    existing public guitest selector vocabulary. The returned selector retains
+    no mutable state and reevaluates ancestry, occurrence, and bound IDs against
+    every current frame.
+
+func Decode(reader io.Reader) (Script, error)
+    Decode reads, strictly decodes, and validates one version-1 script.
+    No caller-provided behavior is invoked until this function has succeeded.
+
+func DecodeBytes(data []byte) (Script, error)
+    DecodeBytes is a convenience wrapper around Decode.
+
+func JSONSchema() []byte
+    JSONSchema deterministically generates the version-1 script schema from an
+    explicit union description. Reflection is deliberately avoided: ordinary
+    struct reflection cannot express the operation and selector discriminators.
+
+func NewArtifactWriter(directory string, options ArtifactOptions) (*ArtifactWriter, error)
+    NewArtifactWriter validates or creates a private, non-symlink output
+    directory. An existing directory is accepted only when it contains private,
+    regular files with deterministic artifact names. Staging publishes no files;
+    Commit documents its publication and failure semantics.
+
+func ReadTrace(r io.Reader, maxBytes int64) (Trace, error)
+    ReadTrace strictly decodes and validates one bounded trace JSON document.
+
+func ResolveJSONPointer(value any, pointer string) (result any, found bool, err error)
+    ResolveJSONPointer resolves the bounded RFC 6901 pointer against decoded
+    JSON. A syntactically valid pointer to a missing member returns found=false.
+
+func Run(ctx context.Context, driver *guitest.Driver, document Script, options Options) (Result, error)
+    Run executes a validated script sequentially on the caller goroutine.
+    It does not close or otherwise take ownership of driver.
+
+func TraceJSONSchema() []byte
+    TraceJSONSchema deterministically generates the closed version-1 trace
+    schema. Trace validation additionally enforces sequential indices and the
+    exact union of per-step artifact metadata.
+
+func Validate(script Script) error
+    Validate checks a decoded or programmatically constructed script against the
+    same closed version-1 contract used by Decode.
+
+func ValidateTrace(trace Trace) error
+    ValidateTrace validates the bounded v1 trace contract.
+
+
+TYPES
+
+type Artifact struct {
+	Name       string `json:"name"`
+	Unredacted bool   `json:"unredacted,omitempty"`
+}
+    Artifact identifies a deterministic artifact without exposing user data
+    in its name. Unredacted is true for image captures, whose pixels cannot be
+    generically redacted by the runner.
+
+type ArtifactError struct {
+	Operation string
+	Err       error
+}
+    ArtifactError is a stable artifact failure. Its message never includes a
+    filesystem path, application error, or artifact content.
+
+func (*ArtifactError) Code() ErrorCode
+
+func (e *ArtifactError) Error() string
+
+func (e *ArtifactError) Is(target error) bool
+
+func (e *ArtifactError) Unwrap() error
+
+type ArtifactLimits struct {
+	MaxFileBytes  int
+	MaxTotalBytes int
+}
+    ArtifactLimits bounds every individual file and the complete published set.
+
+type ArtifactOptions struct {
+	Limits     ArtifactLimits
+	Screenshot ScreenshotFunc
+}
+    ArtifactOptions configures artifact limits and optional image capture.
+
+type ArtifactWriter struct {
+	// Has unexported fields.
+}
+    ArtifactWriter stages a complete result set in memory and publishes it as
+    a transaction. It is safe for concurrent staging, but Commit and Abort are
+    terminal operations.
+
+func (w *ArtifactWriter) Abort() error
+    Abort discards in-memory staging. Committed artifacts are never deleted.
+
+func (w *ArtifactWriter) Artifacts() []Artifact
+    Artifacts returns copied, sorted metadata for currently staged diagnostic
+    artifacts. result.json and trace.json appear only after Commit composition.
+
+func (w *ArtifactWriter) Commit() error
+    Commit publishes one complete artifact generation. Portable filesystems do
+    not provide an atomic multi-file replacement, so result.json is treated as
+    the commit marker: the previous marker is backed up before any visible file
+    changes and the new marker is published last. Returned publication failures
+    before that marker restore the previous generation. A cleanup failure after
+    marker publication is still returned, but the complete new generation and
+    its private backup remnant are left in place for explicit recovery.
+
+    Process interruption can still leave marker-less partial files and private
+    .guitest-stage/.guitest-backup files. Power-loss durability is filesystem
+    dependent: Go has no portable directory-entry sync primitive, so rename
+    ordering is not a durable crash transaction and a marker may survive without
+    every companion file. A later writer rejects temporary remnants instead
+    of guessing which generation was authoritative; callers must discard or
+    explicitly recover the owned artifact directory.
+
+func (w *ArtifactWriter) StageCapture(ctx context.Context, stepIndex int, capture []byte, mode ScreenshotMode) ([]Artifact, error)
+    StageCapture stages a numbered redacted JSON capture and, according to mode,
+    an explicitly unredacted numbered PNG capture.
+
+func (w *ArtifactWriter) StageFailure(stepIndex int, capture []byte) (Artifact, error)
+    StageFailure stages a redacted failure capture for a failed step.
+
+func (w *ArtifactWriter) StageResult(result Result) error
+    StageResult copies and validates the final result. Artifact names supplied
+    by the caller are intentionally discarded and derived from staged payloads
+    at Commit, preventing user-derived artifact names.
+
+func (w *ArtifactWriter) StageTrace(trace Trace) error
+    StageTrace copies and validates the final trace.
+
+type ContainingSelector struct {
+	Target     Selector `json:"target"`
+	Descendant Selector `json:"descendant"`
+}
+
+type Defaults struct {
+	Timeout *Duration `json:"timeout,omitempty"`
+}
+
+type Duration time.Duration
+    Duration is a JSON string parsed with time.ParseDuration.
+
+func (d Duration) Duration() time.Duration
+
+func (d Duration) MarshalJSON() ([]byte, error)
+
+func (d Duration) String() string
+
+func (d *Duration) UnmarshalJSON(data []byte) error
+
+type ErrorCode string
+    ErrorCode is a stable, machine-readable failure category.
+
+const (
+	CodeInvalidScript   ErrorCode = "invalid_script"
+	CodeTimeout         ErrorCode = "timeout"
+	CodeCancelled       ErrorCode = "cancelled"
+	CodeNotFound        ErrorCode = "not_found"
+	CodeAmbiguous       ErrorCode = "ambiguous"
+	CodeNotInteractable ErrorCode = "not_interactable"
+	CodeAssertionFailed ErrorCode = "assertion_failed"
+	CodeProbeError      ErrorCode = "probe_error"
+	CodeFrameLimit      ErrorCode = "frame_limit"
+	CodeClosed          ErrorCode = "closed"
+	CodeArtifactError   ErrorCode = "artifact_error"
+	CodeInternal        ErrorCode = "internal"
+)
+type Expectation string
+
+const (
+	ExpectPresent                  Expectation = "present"
+	ExpectAbsent                   Expectation = "absent"
+	ExpectEnabled                  Expectation = "enabled"
+	ExpectDisabled                 Expectation = "disabled"
+	ExpectSelected                 Expectation = "selected"
+	ExpectUnselected               Expectation = "unselected"
+	ExpectCount                    Expectation = "count"
+	ExpectViewportVisible          Expectation = "viewportVisible"
+	ExpectViewportPartiallyVisible Expectation = "viewportPartiallyVisible"
+	ExpectViewportClipped          Expectation = "viewportClipped"
+)
+type Failure struct {
+	StepIndex int       `json:"stepIndex"`
+	StepID    string    `json:"stepId,omitempty"`
+	Operation Operation `json:"operation"`
+	Code      ErrorCode `json:"code"`
+	Frame     uint64    `json:"frame"`
+}
+
+type InvalidScriptError struct {
+	Path   string
+	Reason string
+}
+    InvalidScriptError describes a pre-execution protocol or validation error.
+    Its text contains no script values, which keeps it safe for bounded traces.
+
+func (*InvalidScriptError) Code() ErrorCode
+
+func (e *InvalidScriptError) Error() string
+
+func (*InvalidScriptError) Unwrap() error
+
+type Key struct {
+	Name      string        `json:"name"`
+	Modifiers []KeyModifier `json:"modifiers,omitempty"`
+}
+
+type KeyModifier string
+
+const (
+	ModifierShift   KeyModifier = "shift"
+	ModifierControl KeyModifier = "control"
+	ModifierAlt     KeyModifier = "alt"
+	ModifierSuper   KeyModifier = "super"
+	ModifierCommand KeyModifier = "command"
+)
+type Metric struct {
+	PxPerDp float64 `json:"pxPerDp"`
+	PxPerSp float64 `json:"pxPerSp"`
+}
+
+type NthSelector struct {
+	Selector Selector `json:"selector"`
+	Index    int      `json:"index"`
+}
+
+type Operation string
+
+const (
+	OpTap            Operation = "tap"
+	OpDoubleTap      Operation = "doubleTap"
+	OpLongPress      Operation = "longPress"
+	OpPress          Operation = "press"
+	OpMove           Operation = "move"
+	OpRelease        Operation = "release"
+	OpCancelPointer  Operation = "cancelPointer"
+	OpDrag           Operation = "drag"
+	OpScroll         Operation = "scroll"
+	OpFocus          Operation = "focus"
+	OpType           Operation = "type"
+	OpKey            Operation = "key"
+	OpBack           Operation = "back"
+	OpClearFocus     Operation = "clearFocus"
+	OpSetSelection   Operation = "setSelection"
+	OpSetComposition Operation = "setComposition"
+	OpEdit           Operation = "edit"
+	OpResize         Operation = "resize"
+	OpAdvance        Operation = "advance"
+	OpSettle         Operation = "settle"
+	OpExpect         Operation = "expect"
+	OpExpectSnapshot Operation = "expectSnapshot"
+	OpExpectProbe    Operation = "expectProbe"
+	OpCapture        Operation = "capture"
+)
+type Options struct {
+	Probes      map[string]ProbeFunc
+	Artifacts   *ArtifactWriter
+	DumpOptions guitest.DumpOptions
+}
+    Options supplies consumer-owned, allowlisted probes and optional artifact
+    output. Run never closes Driver.
+
+type Point struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type ProbeFunc func(ctx context.Context, args json.RawMessage) (json.RawMessage, error)
+    ProbeFunc is a consumer-registered, read-only integrity probe. Args and the
+    returned JSON are copied, decoded, and bounded by the runner. The callback
+    must honor ctx and must not mutate application state.
+
+type Range struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+type Result struct {
+	Version   int      `json:"version"`
+	Name      string   `json:"name"`
+	Status    Status   `json:"status"`
+	Steps     int      `json:"steps"`
+	Failure   *Failure `json:"failure,omitempty"`
+	Artifacts []string `json:"artifacts,omitempty"`
+}
+    Result is the bounded final result written to result.json. Diagnostic detail
+    belongs in separate redacted artifacts, not this structure.
+
+type Role string
+
+const (
+	RoleUnknown  Role = "unknown"
+	RoleButton   Role = "button"
+	RoleCheckbox Role = "checkbox"
+	RoleEditor   Role = "editor"
+	RoleRadio    Role = "radio"
+	RoleSwitch   Role = "switch"
+)
+type ScreenshotFunc func(context.Context, int) ([]byte, error)
+    ScreenshotFunc returns PNG bytes for the requested step. Implementations
+    should return ErrScreenshotUnavailable when no backend is available.
+
+type ScreenshotMode string
+
+const (
+	ScreenshotNever    ScreenshotMode = "never"
+	ScreenshotOptional ScreenshotMode = "optional"
+	ScreenshotRequired ScreenshotMode = "required"
+)
+type Script struct {
+	Version  int       `json:"version"`
+	Name     string    `json:"name"`
+	Fixture  string    `json:"fixture,omitempty"`
+	Defaults *Defaults `json:"defaults,omitempty"`
+	Steps    []Step    `json:"steps"`
+}
+
+type Selector struct {
+	Label       *string             `json:"label,omitempty"`
+	Description *string             `json:"description,omitempty"`
+	Name        *string             `json:"name,omitempty"`
+	Role        *Role               `json:"role,omitempty"`
+	Text        *string             `json:"text,omitempty"`
+	ID          *string             `json:"id,omitempty"`
+	Enabled     *bool               `json:"enabled,omitempty"`
+	Selected    *bool               `json:"selected,omitempty"`
+	All         []Selector          `json:"all,omitempty"`
+	Within      *WithinSelector     `json:"within,omitempty"`
+	Containing  *ContainingSelector `json:"containing,omitempty"`
+	Nth         *NthSelector        `json:"nth,omitempty"`
+}
+    Selector is a recursive tagged union. Exactly one field must be populated.
+    Pointer leaves distinguish an omitted operator from a valid false or empty
+    literal.
+
+type Size struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+type Status string
+
+const (
+	StatusPassed Status = "passed"
+	StatusFailed Status = "failed"
+)
+type Step struct {
+	ID      string    `json:"id,omitempty"`
+	Op      Operation `json:"op"`
+	Timeout *Duration `json:"timeout,omitempty"`
+
+	Selector *Selector `json:"selector,omitempty"`
+	Duration *Duration `json:"duration,omitempty"`
+	Position *Point    `json:"position,omitempty"`
+	Delta    *Point    `json:"delta,omitempty"`
+	Text     *string   `json:"text,omitempty"`
+	Key      *Key      `json:"key,omitempty"`
+	Range    *Range    `json:"range,omitempty"`
+	Size     *Size     `json:"size,omitempty"`
+	Metric   *Metric   `json:"metric,omitempty"`
+
+	Expect Expectation `json:"expect,omitempty"`
+	Count  *int        `json:"count,omitempty"`
+
+	Component string          `json:"component,omitempty"`
+	Pointer   *string         `json:"pointer,omitempty"`
+	Equals    json.RawMessage `json:"equals,omitempty"`
+	NotEquals json.RawMessage `json:"notEquals,omitempty"`
+	Exists    *bool           `json:"exists,omitempty"`
+
+	Probe string          `json:"probe,omitempty"`
+	Args  json.RawMessage `json:"args,omitempty"`
+
+	Name       string         `json:"name,omitempty"`
+	Components []string       `json:"components,omitempty"`
+	Screenshot ScreenshotMode `json:"screenshot,omitempty"`
+}
+    Step is the closed union of all version-1 operations. Validate rejects every
+    field that is not meaningful for the selected Op.
+
+type StepError struct {
+	StepIndex int
+	StepID    string
+	Operation Operation
+	Code      ErrorCode
+	Frame     uint64
+	Err       error
+}
+    StepError identifies one failed step without copying script or application
+    values. Unwrap preserves the useful underlying error category.
+
+func (e *StepError) Error() string
+
+func (e *StepError) Unwrap() error
+
+type Trace struct {
+	Version   int         `json:"version"`
+	Status    Status      `json:"status"`
+	Steps     []TraceStep `json:"steps"`
+	Artifacts []Artifact  `json:"artifacts,omitempty"`
+}
+    Trace is the stable, bounded v1 execution trace.
+
+type TraceBuilder struct {
+	// Has unexported fields.
+}
+    TraceBuilder incrementally builds a trace. It copies every supplied step so
+    callers may safely reuse their slices after Add returns.
+
+func NewTraceBuilder() *TraceBuilder
+    NewTraceBuilder returns an empty v1 trace builder.
+
+func (b *TraceBuilder) Add(step TraceStep) error
+    Add appends the next sequential step.
+
+func (b *TraceBuilder) Finish(status Status) (Trace, error)
+    Finish completes the trace and returns an independent copy.
+
+type TraceStep struct {
+	StepIndex     int        `json:"stepIndex"`
+	StepID        string     `json:"stepId,omitempty"`
+	Operation     Operation  `json:"operation"`
+	Status        Status     `json:"status"`
+	Attempts      int        `json:"attempts"`
+	FrameBefore   uint64     `json:"frameBefore"`
+	FrameAfter    uint64     `json:"frameAfter"`
+	VirtualBefore Duration   `json:"virtualBefore"`
+	VirtualAfter  Duration   `json:"virtualAfter"`
+	Code          ErrorCode  `json:"code,omitempty"`
+	Artifacts     []Artifact `json:"artifacts,omitempty"`
+}
+    TraceStep is the bounded, privacy-safe record for one executed step.
+
+type WithinSelector struct {
+	Target   Selector `json:"target"`
+	Ancestor Selector `json:"ancestor"`
+}
+
+package scriptcli // import "github.com/VinceLewis/gio-kit/guitest/scriptcli"
+
+Package scriptcli provides the small, application-independent command layer
+used by compiled consumer test launchers. It does not discover applications,
+load plugins, start subprocesses, use a network, or control a device.
+
+VARIABLES
+
+var (
+	ErrUsage       = errors.New("guitest/scriptcli: invalid command")
+	ErrRegistry    = errors.New("guitest/scriptcli: registry rejected script")
+	ErrApplication = errors.New("guitest/scriptcli: invalid application")
+)
+
+FUNCTIONS
+
+func Run(ctx context.Context, args []string, config Config) (result script.Result, returnErr error)
+    Run parses `run -script FILE -artifacts DIRECTORY`, opens the selected
+    compiled application, and executes the script. All application and artifact
+    cleanup errors are joined with the primary error.
+
+
+TYPES
+
+type Application struct {
+	Driver     *guitest.Driver
+	Probes     map[string]script.ProbeFunc
+	Screenshot script.ScreenshotFunc
+	Close      func() error
+}
+    Application is one application instance returned by an Opener.
+
+    Driver is always closed by Run. Close is optional and is invoked exactly
+    once afterwards for opener-owned resources that are not owned by Driver.
+    Probes is the per-instance implementation of the names allowlisted in
+    Config.Probes. Screenshot is optional and receives the step context.
+
+type Config struct {
+	Open           Opener
+	Fixtures       Names
+	Probes         Names
+	DumpOptions    guitest.DumpOptions
+	ArtifactLimits script.ArtifactLimits
+}
+    Config is the complete consumer-specific boundary. Fixture and probe names
+    are validated before Open is called, so scripts cannot discover or invoke
+    undeclared application behavior.
+
+type Names map[string]struct{}
+    Names is a closed set of consumer-owned fixture or probe names.
+
+type Opener func(context.Context, string) (Application, error)
+    Opener constructs the consumer application for one already-validated,
+    allowlisted fixture name. It may return a partial Application with an error;
+    Run still closes every returned resource.
 

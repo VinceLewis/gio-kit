@@ -1,4 +1,4 @@
-//go:build !guitest
+//go:build !guitest && !guitestrunner
 
 package main
 

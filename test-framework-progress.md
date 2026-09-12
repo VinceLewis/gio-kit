@@ -4,6 +4,25 @@ Plan: [test-framework-plan.md](test-framework-plan.md).
 
 ## Current checkpoint
 
+- 2026-09-12: Gio Playwright GK-1 through GK-7 are complete. The strict v1
+  protocol/schema, selector compiler, read-only actionability seam, sequential
+  runner, bounded probes/snapshots, privacy-safe trace/artifact layer, consumer
+  CLI, generic artifact CLI, and 24-step production navigation-demo scenario
+  are implemented. A post-implementation audit fixed cancellation-before-input,
+  misleading artifact results, stale artifacts, unsafe directory chmod, trace
+  inconsistency, raw validation-key disclosure, and sensitive map-key leakage.
+  `./tools/test-checkpoint.sh -count=1` passes, including CGO-on/off isolation,
+  the real SQLite demo root, full Termux tests/vet, and generated references.
+  GK-8 awaits only the separately authorized Gio-Kit commit/push needed for a
+  published pseudo-version; ADL-4 and later work cannot use a sibling checkout.
+
+- 2026-09-12: `gio-playwright.md` P0 is approved and frozen. Execution through
+  completion is authorized, with automated gates before one final user-owned
+  device checkpoint. The v1 runner remains in-process, vocabulary-blind, and
+  independent of a Gio fork or live bridge. ADL application suites are
+  hash-verified, model-matched, test-only pins; Giggle data is synthetic. The
+  lead owns shared integration files and ledgers across the three repositories.
+
 - 2026-09-11: ADL-Gio drawer refinement adds explicit action/toggle semantics
   and dismissal policy, compact close labeling, separate navigation/utility
   hierarchy, aligned icon/text columns, concise catalog-backed availability,

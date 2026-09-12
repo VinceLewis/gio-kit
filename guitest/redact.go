@@ -97,14 +97,26 @@ func (s *sanitizer) value(path string, value any, depth int) any {
 		keys := v.MapKeys()
 		sort.Slice(keys, func(i, j int) bool { return keys[i].String() < keys[j].String() })
 		result := map[string]any{}
+		usedKeys := make(map[string]struct{}, len(keys))
 		for _, key := range keys {
 			if s.values >= s.options.MaxValues {
 				s.truncated = true
 				break
 			}
 			name := key.String()
-			// Preserve ordinary field names, redact values under sensitive keys.
-			result[s.key(name)] = s.value(path+"."+name, v.MapIndex(key).Interface(), depth+1)
+			cleanName := s.mapKey(path, name)
+			uniqueName, ok := s.uniqueKey(cleanName, usedKeys)
+			if !ok {
+				s.truncated = true
+				break
+			}
+			if sensitiveText(name) {
+				result[uniqueName] = diagnostic.Redacted
+				continue
+			}
+			// Descendant paths use only the sanitized key. This prevents a caller's
+			// Redact callback from observing or accidentally returning the original.
+			result[uniqueName] = s.value(path+"."+uniqueName, v.MapIndex(key).Interface(), depth+1)
 		}
 		return result
 	case reflect.Struct:
@@ -139,4 +151,125 @@ func (s *sanitizer) key(value string) string {
 		return s.text("key", value)
 	}
 	return value
+}
+
+// mapKey treats runtime map names as data rather than schema fields. Safe
+// defaults run before the caller's additive policy, and the callback receives
+// a structural path that does not repeat the possibly sensitive key.
+func (s *sanitizer) mapKey(path, value string) string {
+	if sensitiveMapKey(value) {
+		return s.boundedMapKey(diagnostic.Redacted)
+	}
+	return s.boundedMapKey(s.text(path+".<map-key>", value))
+}
+
+func (s *sanitizer) boundedMapKey(value string) string {
+	if len(value) <= s.options.MaxStringBytes {
+		return value
+	}
+	s.truncated = true
+	if value == diagnostic.Redacted {
+		return strings.Repeat("*", s.options.MaxStringBytes)
+	}
+	value = value[:s.options.MaxStringBytes]
+	for !utf8.ValidString(value) && len(value) > 0 {
+		value = value[:len(value)-1]
+	}
+	return value
+}
+
+// uniqueKey preserves every map entry when redaction or truncation coalesces
+// names. Its ordinal suffix depends only on stable sorted position, never on a
+// hash or fragment of the original key.
+func (s *sanitizer) uniqueKey(base string, used map[string]struct{}) (string, bool) {
+	if _, exists := used[base]; !exists {
+		used[base] = struct{}{}
+		return base, true
+	}
+	for ordinal := 2; ordinal <= s.options.MaxValues; ordinal++ {
+		suffix := fmt.Sprintf("#%d", ordinal)
+		if len(suffix) > s.options.MaxStringBytes {
+			return "", false
+		}
+		prefix := base
+		limit := s.options.MaxStringBytes - len(suffix)
+		if limit < 0 {
+			prefix = ""
+		} else if len(prefix) > limit {
+			prefix = prefix[:limit]
+			for !utf8.ValidString(prefix) && len(prefix) > 0 {
+				prefix = prefix[:len(prefix)-1]
+			}
+			s.truncated = true
+		}
+		candidate := prefix + suffix
+		if _, exists := used[candidate]; exists {
+			continue
+		}
+		used[candidate] = struct{}{}
+		return candidate, true
+	}
+	return "", false
+}
+
+func sensitiveMapKey(value string) bool {
+	if value == diagnostic.Redacted || sensitiveText(value) {
+		return true
+	}
+	trimmed := strings.TrimSpace(value)
+	lower := strings.ToLower(trimmed)
+	if looksLikeEmail(trimmed) || looksLikeUUID(trimmed) || looksLikeOpaqueID(trimmed) {
+		return true
+	}
+	for _, prefix := range []string{"record-", "record_", "record/", "record:", "rec-", "rec_", "rec/", "rec:", "sk-", "ghp_", "github_pat_"} {
+		if strings.HasPrefix(lower, prefix) && len(lower) > len(prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeEmail(value string) bool {
+	if strings.ContainsAny(value, " \t\r\n") || strings.Count(value, "@") != 1 {
+		return false
+	}
+	parts := strings.SplitN(value, "@", 2)
+	return parts[0] != "" && strings.Contains(parts[1], ".") && !strings.HasPrefix(parts[1], ".") && !strings.HasSuffix(parts[1], ".")
+}
+
+func looksLikeUUID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, character := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if character != '-' {
+				return false
+			}
+			continue
+		}
+		if !((character >= '0') && (character <= '9')) && !((character >= 'a') && (character <= 'f')) && !((character >= 'A') && (character <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func looksLikeOpaqueID(value string) bool {
+	if len(value) < 20 || strings.ContainsAny(value, " \t\r\n") {
+		return false
+	}
+	letters, digits := false, false
+	for _, character := range value {
+		switch {
+		case character >= '0' && character <= '9':
+			digits = true
+		case character >= 'a' && character <= 'z', character >= 'A' && character <= 'Z':
+			letters = true
+		case character == '-', character == '_', character == '.', character == '/', character == ':':
+		default:
+			return false
+		}
+	}
+	return letters && digits
 }

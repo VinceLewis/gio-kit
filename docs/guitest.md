@@ -5,6 +5,9 @@ acceptance. The driver exercises real Gio input without a window, display,
 GPU, SDK, emulator, ADB, or server. Applications own their theme, records,
 storage, policies, and lifecycle.
 
+For strict JSON scenarios, consumer launchers, allowlisted probes, and trace
+artifacts, read [Declarative Gio test scripts](guitest-script.md).
+
 ## Termux commands
 
 ```sh

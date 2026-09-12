@@ -10,11 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"gioui.org/font/gofont"
 	"gioui.org/io/semantic"
-	"gioui.org/text"
 	"gioui.org/unit"
-	"github.com/VinceLewis/gio-kit/diagnostic"
 	"github.com/VinceLewis/gio-kit/grid"
 	"github.com/VinceLewis/gio-kit/guitest"
 )
@@ -28,31 +25,7 @@ func deadline(t *testing.T) context.Context {
 
 func testDemo(t *testing.T, dataDir string) (*guitest.Driver, *demoUI) {
 	t.Helper()
-	var ui *demoUI
-	d, err := guitest.NewApp(func(e guitest.Environment) (guitest.Harness, error) {
-		var err error
-		ui, err = newDemoUI(demoEnvironment{DataDir: dataDir, Context: e.Context, Invalidate: e.Invalidate, Sleep: e.Clock.Sleep})
-		if err != nil {
-			return guitest.Harness{}, err
-		}
-		ui.theme.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
-		return guitest.Harness{Layout: ui.Layout, Idle: ui.Idle, Close: ui.Close, Providers: map[string]diagnostic.Provider{
-			"router": ui.router,
-			"grid": diagnostic.ProviderFunc(func(request diagnostic.Request) diagnostic.Component {
-				if ui.gridDemo.widget == nil {
-					return diagnostic.Component{Kind: "grid", State: map[string]any{"loading": true}}
-				}
-				return ui.gridDemo.widget.DebugSnapshot(request)
-			}),
-			"form": diagnostic.ProviderFunc(func(request diagnostic.Request) diagnostic.Component {
-				id := ui.router.Current().Route.Params["id"].String()
-				if form := ui.formDemos[id]; form != nil {
-					return form.widget.DebugSnapshot(request)
-				}
-				return diagnostic.Component{Kind: "form", State: map[string]any{"available": false}}
-			}),
-		}}, nil
-	})
+	d, ui, err := newDemoDriver(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
