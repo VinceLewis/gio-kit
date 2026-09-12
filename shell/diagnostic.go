@@ -44,6 +44,6 @@ func (w *Widget) DebugSnapshot(request diagnostic.Request) diagnostic.Component 
 		"drawerBeforeEnd": w.drawerList.Position.BeforeEnd, "drawerOffsetLast": w.drawerList.Position.OffsetLast,
 		"drawerCount": w.drawerList.Position.Count, "drawerLength": w.drawerList.Position.Length,
 		"navigationRowHeight": w.navigationRowHeight, "utilityRowHeight": w.utilityRowHeight,
-		"groupHeadingHeight": w.groupHeadingHeight, "helpHeight": w.helpHeight,
+		"groupHeadingHeight": w.groupHeadingHeight, "helpHeight": w.helpHeight, "barHeight": w.barHeight,
 	}}
 }

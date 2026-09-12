@@ -15,8 +15,14 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/VinceLewis/gio-kit/accessibility"
+	"github.com/VinceLewis/gio-kit/theme"
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
+
+// drawerIconSize is the drawer's own icon dimension. It is not part of the
+// density contract: only the shared top-bar contract (Metrics.IconSize)
+// scales with density.
+const drawerIconSize = unit.Dp(20)
 
 type Widget struct {
 	Model      Model
@@ -42,6 +48,7 @@ type Widget struct {
 	overflowControls                      []Control
 	navigationRowHeight, utilityRowHeight int
 	groupHeadingHeight, helpHeight        int
+	barHeight                             int
 }
 
 type barControl struct {
@@ -80,6 +87,13 @@ func (w *Widget) SetModel(model Model) error {
 func (w *Widget) DrawerOpen() bool { return w.drawerOpen }
 func (w *Widget) CloseDrawer()     { w.drawerOpen = false }
 
+// metrics resolves the widget's current density into a complete profile. The
+// zero Model.Metrics and an empty Model.Density resolve to the built-in
+// comfortable profile, preserving the geometry existing callers see.
+func (w *Widget) metrics() theme.Metrics {
+	return w.Model.Metrics.Resolve(w.Model.Density)
+}
+
 func (w *Widget) ResolvedMode(gtx layout.Context) Mode {
 	pxPerDp := gtx.Metric.PxPerDp
 	if pxPerDp <= 0 {
@@ -88,8 +102,8 @@ func (w *Widget) ResolvedMode(gtx layout.Context) Mode {
 	return ResolveMode(w.Mode, unit.Dp(float32(gtx.Constraints.Max.X)/pxPerDp), w.Breakpoint)
 }
 
-func (w *Widget) Layout(gtx layout.Context, theme *material.Theme, content layout.Widget) layout.Dimensions {
-	if w == nil || theme == nil || content == nil {
+func (w *Widget) Layout(gtx layout.Context, th *material.Theme, content layout.Widget) layout.Dimensions {
+	if w == nil || th == nil || content == nil {
 		return layout.Dimensions{}
 	}
 	w.handleClicks(gtx)
@@ -100,38 +114,42 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme, content layou
 		barContext.Constraints.Max.X -= drawerWidth
 	}
 	w.allocateBar(barContext, !wide)
-	return surface(gtx, theme.Palette.Bg, func(gtx layout.Context) layout.Dimensions {
+	return surface(gtx, th.Palette.Bg, func(gtx layout.Context) layout.Dimensions {
 		if wide {
 			w.drawerOpen = false
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Min.X, gtx.Constraints.Max.X = drawerWidth, drawerWidth
 					gtx.Constraints.Min.Y = gtx.Constraints.Max.Y
-					return w.drawer(gtx, theme)
+					return w.drawer(gtx, th)
 				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return w.main(gtx, theme, false, content) }),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return w.main(gtx, th, false, content) }),
 			)
 		}
-		return w.main(gtx, theme, true, func(gtx layout.Context) layout.Dimensions {
+		return w.main(gtx, th, true, func(gtx layout.Context) layout.Dimensions {
 			if w.drawerOpen {
-				return w.drawer(gtx, theme)
+				return w.drawer(gtx, th)
 			}
 			return content(gtx)
 		})
 	})
 }
 
-func (w *Widget) main(gtx layout.Context, theme *material.Theme, compact bool, content layout.Widget) layout.Dimensions {
+func (w *Widget) main(gtx layout.Context, th *material.Theme, compact bool, content layout.Widget) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.topBar(gtx, theme, compact) }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.topBar(gtx, th, compact) }),
 		layout.Flexed(1, content),
 	)
 }
 
-func (w *Widget) topBar(gtx layout.Context, theme *material.Theme, compact bool) layout.Dimensions {
-	barTheme := w.barTheme(theme)
-	theme = &barTheme
-	return surface(gtx, theme.Palette.ContrastBg, func(gtx layout.Context) layout.Dimensions {
+func (w *Widget) topBar(gtx layout.Context, th *material.Theme, compact bool) layout.Dimensions {
+	m := w.metrics()
+	barTheme := w.barTheme(th)
+	th = &barTheme
+	dims := surface(gtx, th.Palette.ContrastBg, func(gtx layout.Context) layout.Dimensions {
+		// BarHeight is a floor, not a cap: a larger font scale can still grow
+		// the title beyond it without being clipped.
+		gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(m.BarHeight))
 		children := make([]layout.FlexChild, 0, len(w.barControls)+2)
 		if compact {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -142,7 +160,9 @@ func (w *Widget) topBar(gtx layout.Context, theme *material.Theme, compact bool)
 				if label == "" {
 					label = w.Model.DrawerTitle
 				}
-				button := material.IconButton(theme, &w.menu, icon, label)
+				// The navigation touch target is fixed at 48dp in every
+				// profile; it never scales with density.
+				button := material.IconButton(th, &w.menu, icon, label)
 				button.Size, button.Inset = unit.Dp(24), layout.UniformInset(unit.Dp(12))
 				return button.Layout(gtx)
 			}))
@@ -152,31 +172,39 @@ func (w *Widget) topBar(gtx layout.Context, theme *material.Theme, compact bool)
 			if title == "" {
 				title = w.Model.Title
 			}
-			label := material.Body1(theme, title)
+			// TitleSize stays a unit.Sp on the label so Android font scaling
+			// keeps applying; it is never converted to pixels here.
+			label := material.Label(th, m.TitleSize, title)
 			label.Font.Weight = font.Bold
-			label.Color = theme.Palette.ContrastFg
+			label.Color = th.Palette.ContrastFg
 			label.MaxLines, label.Truncator = 1, "…"
-			return layout.Inset{Left: unit.Dp(8), Right: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Left: m.InlineGap, Right: m.ControlGap}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return (accessibility.Group{Description: w.Model.Title}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return boundedText(gtx, unit.Dp(32), label.Layout)
+					return boundedTitle(gtx, label.Layout)
 				})
 			})
 		}))
 		for _, item := range w.barControls {
 			item := item
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Min.X, gtx.Constraints.Max.X = item.width, item.width
-				return w.control(gtx, theme, item.control, true, false)
+				// item.width is a maximum, not a reservation: a short label
+				// measures its own intrinsic width instead of always painting
+				// the full allocated share. The 48dp minimum still applies.
+				gtx.Constraints.Min.X = min(gtx.Dp(theme.MinTouchTarget), item.width)
+				gtx.Constraints.Max.X = item.width
+				return w.control(gtx, th, m, item.control, true, false)
 			}))
 		}
-		return layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(4), Right: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Left: m.ControlGap, Right: m.ControlGap}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 		})
 	})
+	w.barHeight = dims.Size.Y
+	return dims
 }
 
-func (w *Widget) barTheme(theme *material.Theme) material.Theme {
-	bar := *theme
+func (w *Widget) barTheme(th *material.Theme) material.Theme {
+	bar := *th
 	if w.BarBackground.A != 0 {
 		bar.Palette.ContrastBg = w.BarBackground
 	}
@@ -189,29 +217,78 @@ func (w *Widget) barTheme(theme *material.Theme) material.Theme {
 // Keep space for the destination title before allocating controls. Overflow
 // remains available in the independently scrolling drawer in either mode.
 func (w *Widget) allocateBar(gtx layout.Context, compact bool) {
+	m := w.metrics()
 	w.barControls = w.barControls[:0]
 	w.overflowControls = w.overflowControls[:0]
-	available := max(0, gtx.Constraints.Max.X-gtx.Dp(unit.Dp(8)))
+	barWidth := gtx.Constraints.Max.X
+	touch := gtx.Dp(theme.MinTouchTarget)
+	available := max(0, barWidth-2*gtx.Dp(m.ControlGap))
 	if compact {
-		available = max(0, available-gtx.Dp(unit.Dp(48)))
+		available = max(0, available-touch)
 	}
 	reservedTitle := min(gtx.Dp(unit.Dp(144)), available/3)
 	remaining := available - reservedTitle
+	// contextCap bounds any single text-bearing control — a control with
+	// visible text beside its icon, a toggle, or no icon at all — to roughly
+	// 45% of the whole bar width, so it alone cannot dominate a phone bar.
+	// It is a per-control maximum, not a per-control reservation.
+	contextCap := int(float32(barWidth) * 0.45)
+	if contextCap < touch {
+		contextCap = touch
+	}
+	// readableMinimum is the fixed width every text-bearing control used to
+	// get before density. Squeezing several of them below it would be worse
+	// than letting the surplus overflow into the drawer, as it always could.
+	readableMinimum := gtx.Dp(unit.Dp(144))
+
+	type candidate struct {
+		control     Control
+		textBearing bool
+	}
+	candidates := make([]candidate, 0, len(w.Model.TopBar))
+	textCount, iconOnlyBudget := 0, 0
 	for _, control := range w.Model.TopBar {
-		width := gtx.Dp(unit.Dp(48))
-		if control.Kind == ControlToggle || control.CompactLabel != "" || control.Icon == nil {
-			width = gtx.Dp(unit.Dp(144))
-		}
-		if (compact && control.Icon == nil && control.CompactLabel == "") || remaining < width {
+		if compact && control.Icon == nil && control.CompactLabel == "" {
 			w.overflowControls = append(w.overflowControls, control)
 			continue
 		}
+		textBearing := control.Kind == ControlToggle || control.CompactLabel != "" || control.Icon == nil
+		candidates = append(candidates, candidate{control: control, textBearing: textBearing})
+		if textBearing {
+			textCount++
+		} else {
+			iconOnlyBudget += touch
+		}
+	}
+
+	// Several text-bearing controls share what remains after icon-only
+	// controls, each still bounded by contextCap. The equal share replaces
+	// the single-control cap only when it stays at or above readableMinimum;
+	// otherwise controls are allocated in arrival order at the single-control
+	// cap and the surplus overflows, exactly as it did before this rule.
+	textWidth := contextCap
+	if textCount > 1 {
+		if share := (remaining - iconOnlyBudget) / textCount; share >= readableMinimum {
+			textWidth = min(contextCap, share)
+		}
+	}
+
+	for _, c := range candidates {
+		width := touch
+		if c.textBearing {
+			width = textWidth
+		}
+		if remaining < width {
+			w.overflowControls = append(w.overflowControls, c.control)
+			continue
+		}
 		remaining -= width
-		w.barControls = append(w.barControls, barControl{control: control, width: width})
+		w.barControls = append(w.barControls, barControl{control: c.control, width: width})
 	}
 }
 
-func (w *Widget) drawer(gtx layout.Context, theme *material.Theme) layout.Dimensions {
+func (w *Widget) drawer(gtx layout.Context, th *material.Theme) layout.Dimensions {
+	m := w.metrics()
 	controls := append([]Control(nil), w.Model.Drawer...)
 	controls = append(controls, w.overflowControls...)
 	reasons := make(map[string]int)
@@ -237,13 +314,13 @@ func (w *Widget) drawer(gtx layout.Context, theme *material.Theme) layout.Dimens
 	if sharedUnavailable {
 		count++
 	}
-	return surface(gtx, theme.Palette.Bg, func(gtx layout.Context) layout.Dimensions {
-		list := material.List(theme, &w.drawerList)
+	return surface(gtx, th.Palette.Bg, func(gtx layout.Context) layout.Dimensions {
+		list := material.List(th, &w.drawerList)
 		list.Track.MinorPadding = unit.Dp(3)
 		list.Indicator.MinorWidth = unit.Dp(3)
 		list.Indicator.CornerRadius = unit.Dp(1.5)
-		list.Indicator.Color = alpha(theme.Palette.Fg, 96)
-		list.Indicator.HoverColor = alpha(theme.Palette.Fg, 160)
+		list.Indicator.Color = alpha(th.Palette.Fg, 96)
+		list.Indicator.HoverColor = alpha(th.Palette.Fg, 160)
 		return list.Layout(gtx, count, func(gtx layout.Context, index int) layout.Dimensions {
 			// List children receive an unbounded vertical maximum. Clear the
 			// viewport minimum so every row keeps its own intrinsic height.
@@ -252,20 +329,20 @@ func (w *Widget) drawer(gtx layout.Context, theme *material.Theme) layout.Dimens
 				if w.Model.DrawerTitle == "" {
 					return layout.Dimensions{}
 				}
-				label := material.Body1(theme, w.Model.DrawerTitle)
+				label := material.Label(th, m.HeadingSize, w.Model.DrawerTitle)
 				label.Font.Weight, label.MaxLines, label.Truncator = font.Bold, 2, "…"
-				return layout.Inset{Top: unit.Dp(12), Bottom: unit.Dp(8), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: unit.Dp(12), Bottom: m.ControlGap, Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return boundedText(gtx, unit.Dp(56), label.Layout)
 				})
 			}
 			index--
 			if index < len(w.Model.Navigation) {
-				return w.navigationItem(gtx, theme, w.Model.Navigation[index], index)
+				return w.navigationItem(gtx, th, m, w.Model.Navigation[index], index)
 			}
 			index -= len(w.Model.Navigation)
 			if utilityHeader {
 				if index == 0 {
-					return w.utilityHeader(gtx, theme, len(w.Model.Navigation) > 0)
+					return w.utilityHeader(gtx, th, m, len(w.Model.Navigation) > 0)
 				}
 				index--
 			}
@@ -278,7 +355,7 @@ func (w *Widget) drawer(gtx layout.Context, theme *material.Theme) layout.Dimens
 							break
 						}
 					}
-					dims := w.supportingText(gtx, theme, reason, unit.Dp(6), unit.Dp(8))
+					dims := w.supportingText(gtx, th, m, reason, unit.Dp(6), unit.Dp(8))
 					w.helpHeight = max(w.helpHeight, dims.Size.Y)
 					return dims
 				}
@@ -286,21 +363,21 @@ func (w *Widget) drawer(gtx layout.Context, theme *material.Theme) layout.Dimens
 			}
 			control := controls[index]
 			showReason := reasons[visibleDisabledReason(control, w.Model.UnavailableSummary)] < 2 || !sharedUnavailable
-			return w.control(gtx, theme, control, false, showReason)
+			return w.control(gtx, th, m, control, false, showReason)
 		})
 	})
 }
 
-func (w *Widget) utilityHeader(gtx layout.Context, theme *material.Theme, separated bool) layout.Dimensions {
+func (w *Widget) utilityHeader(gtx layout.Context, th *material.Theme, m theme.Metrics, separated bool) layout.Dimensions {
 	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if !separated {
 				return layout.Dimensions{}
 			}
-			return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: m.ControlGap, Bottom: m.ControlGap, Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				height := max(1, gtx.Dp(unit.Dp(1)))
 				width := gtx.Constraints.Max.X
-				paint.FillShape(gtx.Ops, alpha(theme.Palette.Fg, 48), clip.Rect{Max: image.Pt(width, height)}.Op())
+				paint.FillShape(gtx.Ops, alpha(th.Palette.Fg, 48), clip.Rect{Max: image.Pt(width, height)}.Op())
 				return layout.Dimensions{Size: image.Pt(width, height)}
 			})
 		}),
@@ -308,7 +385,7 @@ func (w *Widget) utilityHeader(gtx layout.Context, theme *material.Theme, separa
 			if w.Model.UtilityHeading == "" {
 				return layout.Dimensions{}
 			}
-			label := material.Caption(theme, w.Model.UtilityHeading)
+			label := material.Label(th, m.SecondarySize, w.Model.UtilityHeading)
 			label.Font.Weight, label.MaxLines, label.Truncator = font.Bold, 2, "…"
 			return layout.Inset{Bottom: unit.Dp(2), Left: unit.Dp(16), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return boundedText(gtx, unit.Dp(40), label.Layout)
@@ -319,19 +396,19 @@ func (w *Widget) utilityHeader(gtx layout.Context, theme *material.Theme, separa
 	return dims
 }
 
-func (w *Widget) supportingText(gtx layout.Context, theme *material.Theme, value string, top, bottom unit.Dp) layout.Dimensions {
-	label := material.Caption(theme, value)
+func (w *Widget) supportingText(gtx layout.Context, th *material.Theme, m theme.Metrics, value string, top, bottom unit.Dp) layout.Dimensions {
+	label := material.Label(th, m.SecondarySize, value)
 	label.Alignment, label.MaxLines, label.Truncator = text.Start, 4, "…"
 	return layout.Inset{Top: top, Bottom: bottom, Left: unit.Dp(48), Right: unit.Dp(16)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return boundedText(gtx, unit.Dp(72), label.Layout)
 	})
 }
 
-func (w *Widget) navigationItem(gtx layout.Context, theme *material.Theme, item Item, index int) layout.Dimensions {
+func (w *Widget) navigationItem(gtx layout.Context, th *material.Theme, m theme.Metrics, item Item, index int) layout.Dimensions {
 	if item.Group != "" && (index == 0 || item.Group != w.Model.Navigation[index-1].Group) {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Caption(theme, item.Group)
+				label := material.Label(th, m.SecondarySize, item.Group)
 				label.MaxLines, label.Truncator = 2, "…"
 				dims := layout.Inset{Top: unit.Dp(12), Left: unit.Dp(16), Right: unit.Dp(16), Bottom: unit.Dp(2)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return boundedText(gtx, unit.Dp(40), label.Layout)
@@ -339,29 +416,30 @@ func (w *Widget) navigationItem(gtx layout.Context, theme *material.Theme, item 
 				w.groupHeadingHeight = max(w.groupHeadingHeight, dims.Size.Y)
 				return dims
 			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.itemButton(gtx, theme, item) }),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return w.itemButton(gtx, th, m, item) }),
 		)
 	}
-	return w.itemButton(gtx, theme, item)
+	return w.itemButton(gtx, th, m, item)
 }
 
-func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item) layout.Dimensions {
+func (w *Widget) itemButton(gtx layout.Context, th *material.Theme, m theme.Metrics, item Item) layout.Dimensions {
 	click := w.clickable(w.navigation, item.ID)
 	w.navigationFocus[item.ID] = gtx.Focused(click)
 	if !item.Enabled {
 		gtx = gtx.Disabled()
 	}
 	background := color.NRGBA{}
-	foreground := theme.Palette.Fg
+	foreground := th.Palette.Fg
 	if item.Selected {
-		background, foreground = theme.Palette.ContrastBg, theme.Palette.ContrastFg
+		background, foreground = th.Palette.ContrastBg, th.Palette.ContrastFg
 	}
 	if !gtx.Enabled() {
 		foreground.A = uint8(uint16(foreground.A) * 2 / 3)
 	}
-	gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(unit.Dp(48)))
+	// The navigation touch target is fixed at 48dp in every profile.
+	gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(theme.MinTouchTarget))
 	dims := surface(gtx, background, func(gtx layout.Context) layout.Dimensions {
-		dims := semanticClickable(gtx, click, item.Selected, foreground, func(gtx layout.Context) layout.Dimensions {
+		dims := semanticClickable(gtx, click, item.Selected, foreground, 0, func(gtx layout.Context) layout.Dimensions {
 			semantic.Button.Add(gtx.Ops)
 			semantic.LabelOp(item.Label).Add(gtx.Ops)
 			semantic.DescriptionOp(item.DisabledReason).Add(gtx.Ops)
@@ -372,7 +450,7 @@ func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item
 					return drawerIconColumn(gtx, item.Icon, foreground)
 				}))
 				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					label := material.Body2(theme, item.Label)
+					label := material.Label(th, m.BodySize, item.Label)
 					label.Color, label.MaxLines, label.Truncator = foreground, 2, "…"
 					if item.Selected {
 						label.Font.Weight = font.Bold
@@ -391,9 +469,9 @@ func (w *Widget) itemButton(gtx layout.Context, theme *material.Theme, item Item
 	return dims
 }
 
-func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Control, top, showReason bool) layout.Dimensions {
+func (w *Widget) control(gtx layout.Context, th *material.Theme, m theme.Metrics, control Control, top, showReason bool) layout.Dimensions {
 	if control.Kind == ControlToggle {
-		return w.toggleControl(gtx, theme, control, top, showReason)
+		return w.toggleControl(gtx, th, m, control, top, showReason)
 	}
 	click := w.clickable(w.controls, control.ID)
 	w.controlFocus[control.ID] = gtx.Focused(click)
@@ -401,26 +479,33 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 	if !control.Enabled {
 		gtx = gtx.Disabled()
 	}
-	foreground := theme.Palette.Fg
+	foreground := th.Palette.Fg
 	if top {
-		foreground = theme.Palette.ContrastFg
+		foreground = th.Palette.ContrastFg
 	}
 	if disabled {
 		foreground.A = uint8(uint16(foreground.A) * 2 / 3)
 	}
+	radius := unit.Dp(0)
+	if top {
+		radius = m.SurfaceRadius
+	}
 	controlRow := func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(unit.Dp(48)))
-		dims := semanticClickable(gtx, click, control.Selected, foreground, func(gtx layout.Context) layout.Dimensions {
+		// The context-action touch target is fixed at 48dp in every profile.
+		gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(theme.MinTouchTarget))
+		dims := semanticClickable(gtx, click, control.Selected, foreground, radius, func(gtx layout.Context) layout.Dimensions {
 			semantic.Button.Add(gtx.Ops)
 			semantic.LabelOp(control.Label).Add(gtx.Ops)
 			semantic.DescriptionOp(control.DisabledReason).Add(gtx.Ops)
 			semantic.SelectedOp(control.Selected).Add(gtx.Ops)
 			if top && control.Icon != nil && control.CompactLabel == "" {
-				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions { return iconLayout(gtx, control.Icon, foreground) })
+				return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return iconLayout(gtx, control.Icon, foreground, m.IconSize)
+				})
 			}
 			inset := layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8), Left: unit.Dp(16), Right: unit.Dp(16)}
 			if top {
-				inset.Left, inset.Right = unit.Dp(8), unit.Dp(8)
+				inset = layout.Inset{Top: m.ButtonPaddingY, Bottom: m.ButtonPaddingY, Left: m.ButtonPaddingX, Right: m.ButtonPaddingX}
 			}
 			return centeredRow(gtx, inset, func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, 2)
@@ -430,15 +515,17 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 					}))
 				} else if control.Icon != nil {
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions { return iconLayout(gtx, control.Icon, foreground) })
+						return layout.Inset{Right: m.InlineGap}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return iconLayout(gtx, control.Icon, foreground, m.IconSize)
+						})
 					}))
 				}
-				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+				labelWidget := func(gtx layout.Context) layout.Dimensions {
 					visible := control.Label
 					if top && control.CompactLabel != "" {
 						visible = control.CompactLabel
 					}
-					label := material.Body2(theme, visible)
+					label := material.Label(th, m.BodySize, visible)
 					label.Color, label.MaxLines, label.Truncator = foreground, 2, "…"
 					if top {
 						label.MaxLines = 1
@@ -447,7 +534,14 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 						label.Font.Weight = font.Bold
 					}
 					return boundedText(gtx, unit.Dp(44), label.Layout)
-				}))
+				}
+				if top {
+					// The bar's allocation is a maximum: size to content so a
+					// short label does not paint the whole allocated share.
+					children = append(children, layout.Rigid(labelWidget))
+				} else {
+					children = append(children, layout.Flexed(1, labelWidget))
+				}
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 			})
 		})
@@ -466,7 +560,7 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(controlRow),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			dims := w.supportingText(gtx, theme, visibleDisabledReason(control, w.Model.UnavailableSummary), 0, unit.Dp(8))
+			dims := w.supportingText(gtx, th, m, visibleDisabledReason(control, w.Model.UnavailableSummary), 0, unit.Dp(8))
 			w.helpHeight = max(w.helpHeight, dims.Size.Y)
 			return dims
 		}),
@@ -475,7 +569,7 @@ func (w *Widget) control(gtx layout.Context, theme *material.Theme, control Cont
 	return dims
 }
 
-func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, control Control, top, showReason bool) layout.Dimensions {
+func (w *Widget) toggleControl(gtx layout.Context, th *material.Theme, m theme.Metrics, control Control, top, showReason bool) layout.Dimensions {
 	state := w.toggle(control.ID)
 	w.controlFocus[control.ID] = gtx.Focused(state)
 	state.Value = control.Value
@@ -483,9 +577,9 @@ func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, contro
 	if !control.Enabled {
 		gtx = gtx.Disabled()
 	}
-	foreground := theme.Palette.Fg
+	foreground := th.Palette.Fg
 	if top {
-		foreground = theme.Palette.ContrastFg
+		foreground = th.Palette.ContrastFg
 	}
 	if disabled {
 		foreground.A = uint8(uint16(foreground.A) * 2 / 3)
@@ -498,7 +592,8 @@ func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, contro
 		description += control.DisabledReason
 	}
 	row := func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(unit.Dp(48)))
+		// The context-action touch target is fixed at 48dp in every profile.
+		gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, gtx.Dp(theme.MinTouchTarget))
 		content := func(gtx layout.Context) layout.Dimensions {
 			semantic.Switch.Add(gtx.Ops)
 			semantic.LabelOp(control.Label).Add(gtx.Ops)
@@ -506,7 +601,7 @@ func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, contro
 			semantic.SelectedOp(control.Value).Add(gtx.Ops)
 			inset := layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(6), Left: unit.Dp(16), Right: unit.Dp(16)}
 			if top {
-				inset.Left, inset.Right = unit.Dp(8), unit.Dp(8)
+				inset = layout.Inset{Top: m.ButtonPaddingY, Bottom: m.ButtonPaddingY, Left: m.ButtonPaddingX, Right: m.ButtonPaddingX}
 			}
 			return centeredRow(gtx, inset, func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, 3)
@@ -516,33 +611,40 @@ func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, contro
 					}))
 				} else if control.Icon != nil {
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions { return iconLayout(gtx, control.Icon, foreground) })
+						return layout.Inset{Right: m.InlineGap}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return iconLayout(gtx, control.Icon, foreground, m.IconSize)
+						})
 					}))
 				}
-				children = append(children,
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								label := material.Body2(theme, control.Label)
-								label.Color, label.MaxLines, label.Truncator = foreground, 2, "…"
-								return boundedText(gtx, unit.Dp(44), label.Layout)
-							}),
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								if control.ValueLabel == "" {
-									return layout.Dimensions{}
-								}
-								value := material.Caption(theme, control.ValueLabel)
-								value.Color, value.MaxLines, value.Truncator = foreground, 1, "…"
-								return boundedText(gtx, unit.Dp(24), value.Layout)
-							}),
-						)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return toggleIndicator(gtx, theme, state)
-						})
-					}),
-				)
+				textColumn := func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							label := material.Label(th, m.BodySize, control.Label)
+							label.Color, label.MaxLines, label.Truncator = foreground, 2, "…"
+							return boundedText(gtx, unit.Dp(44), label.Layout)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if control.ValueLabel == "" {
+								return layout.Dimensions{}
+							}
+							value := material.Label(th, m.SecondarySize, control.ValueLabel)
+							value.Color, value.MaxLines, value.Truncator = foreground, 1, "…"
+							return boundedText(gtx, unit.Dp(24), value.Layout)
+						}),
+					)
+				}
+				if top {
+					// The bar's allocation is a maximum: size to content so a
+					// short toggle label does not paint the whole allocated share.
+					children = append(children, layout.Rigid(textColumn))
+				} else {
+					children = append(children, layout.Flexed(1, textColumn))
+				}
+				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: m.InlineGap}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return toggleIndicator(gtx, th, state)
+					})
+				}))
 				return layout.Flex{Alignment: layout.Middle}.Layout(gtx, children...)
 			})
 		}
@@ -558,7 +660,7 @@ func (w *Widget) toggleControl(gtx layout.Context, theme *material.Theme, contro
 		dims = layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(row),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				dims := w.supportingText(gtx, theme, visibleDisabledReason(control, w.Model.UnavailableSummary), 0, unit.Dp(8))
+				dims := w.supportingText(gtx, th, m, visibleDisabledReason(control, w.Model.UnavailableSummary), 0, unit.Dp(8))
 				w.helpHeight = max(w.helpHeight, dims.Size.Y)
 				return dims
 			}),
@@ -590,7 +692,7 @@ func visibleDisabledReason(control Control, fallback string) string {
 	return fallback
 }
 
-func semanticClickable(gtx layout.Context, click *widget.Clickable, selected bool, foreground color.NRGBA, content layout.Widget) layout.Dimensions {
+func semanticClickable(gtx layout.Context, click *widget.Clickable, selected bool, foreground color.NRGBA, radius unit.Dp, content layout.Widget) layout.Dimensions {
 	if !gtx.Enabled() {
 		// Gio omits semantics on disabled input regions without filters. A
 		// measured region with no input registration retains the button's
@@ -610,7 +712,9 @@ func semanticClickable(gtx layout.Context, click *widget.Clickable, selected boo
 					opacity = 20
 				}
 				if opacity != 0 {
-					paint.FillShape(gtx.Ops, alpha(foreground, opacity), clip.Rect{Max: gtx.Constraints.Min}.Op())
+					r := gtx.Dp(radius)
+					shape := clip.UniformRRect(image.Rectangle{Max: gtx.Constraints.Min}, r).Op(gtx.Ops)
+					paint.FillShape(gtx.Ops, alpha(foreground, opacity), shape)
 				}
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			},
@@ -627,7 +731,7 @@ func drawerIconColumn(gtx layout.Context, icon *widget.Icon, foreground color.NR
 	gtx.Constraints.Min.X, gtx.Constraints.Max.X = width, width
 	gtx.Constraints.Min.Y = 0
 	return layout.W.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return iconLayout(gtx, icon, foreground)
+		return iconLayout(gtx, icon, foreground, drawerIconSize)
 	})
 }
 
@@ -643,21 +747,33 @@ func boundedText(gtx layout.Context, maxHeight unit.Dp, textWidget layout.Widget
 	return accessibility.BoundedText(gtx, maximum, textWidget)
 }
 
-func toggleIndicator(gtx layout.Context, theme *material.Theme, state *widget.Bool) layout.Dimensions {
+// boundedTitle bounds only the title's width, leaving its height free to grow
+// with font scale. A single-line title with MaxLines already caps its own
+// growth; capping the height too would clip a title at a large font scale.
+func boundedTitle(gtx layout.Context, textWidget layout.Widget) layout.Dimensions {
+	maxWidth := gtx.Constraints.Max.X
+	if gtx.Constraints.Min.X > 0 {
+		maxWidth = min(maxWidth, gtx.Constraints.Min.X)
+	}
+	maximum := image.Pt(min(maxWidth, gtx.Dp(unit.Dp(1024))), gtx.Constraints.Max.Y)
+	return accessibility.BoundedText(gtx, maximum, textWidget)
+}
+
+func toggleIndicator(gtx layout.Context, th *material.Theme, state *widget.Bool) layout.Dimensions {
 	width, height := gtx.Dp(unit.Dp(36)), gtx.Dp(unit.Dp(28))
 	trackHeight, thumb := gtx.Dp(unit.Dp(16)), gtx.Dp(unit.Dp(20))
 	width, height = min(width, gtx.Constraints.Max.X), min(height, gtx.Constraints.Max.Y)
 	trackHeight, thumb = min(trackHeight, height), min(thumb, height)
 	track := image.Rect(0, (height-trackHeight)/2, width, (height+trackHeight)/2)
-	trackColor := alpha(theme.Palette.Fg, 96)
-	thumbColor := theme.Palette.Bg
+	trackColor := alpha(th.Palette.Fg, 96)
+	thumbColor := th.Palette.Bg
 	if state.Value {
-		trackColor = alpha(theme.Palette.ContrastBg, 144)
-		thumbColor = theme.Palette.ContrastBg
+		trackColor = alpha(th.Palette.ContrastBg, 144)
+		thumbColor = th.Palette.ContrastBg
 	}
 	if !gtx.Enabled() {
 		trackColor = alpha(trackColor, 128)
-		thumbColor = alpha(theme.Palette.Fg, 128)
+		thumbColor = alpha(th.Palette.Fg, 128)
 	}
 	paint.FillShape(gtx.Ops, trackColor, clip.UniformRRect(track, trackHeight/2).Op(gtx.Ops))
 	x := thumb / 2
@@ -674,7 +790,7 @@ func toggleIndicator(gtx layout.Context, theme *material.Theme, state *widget.Bo
 		}
 		haloRadius := min(height/2, gtx.Dp(unit.Dp(14)))
 		halo := image.Rect(center.X-haloRadius, center.Y-haloRadius, center.X+haloRadius, center.Y+haloRadius)
-		paint.FillShape(gtx.Ops, alpha(theme.Palette.ContrastBg, opacity), clip.Ellipse(halo).Op(gtx.Ops))
+		paint.FillShape(gtx.Ops, alpha(th.Palette.ContrastBg, opacity), clip.Ellipse(halo).Op(gtx.Ops))
 	}
 	radius := thumb / 2
 	thumbRect := image.Rect(center.X-radius, center.Y-radius, center.X+radius, center.Y+radius)
@@ -682,9 +798,9 @@ func toggleIndicator(gtx layout.Context, theme *material.Theme, state *widget.Bo
 	return layout.Dimensions{Size: image.Pt(width, height)}
 }
 
-func iconLayout(gtx layout.Context, icon *widget.Icon, foreground color.NRGBA) layout.Dimensions {
-	size := min(gtx.Dp(unit.Dp(20)), gtx.Constraints.Max.X, gtx.Constraints.Max.Y)
-	gtx.Constraints = layout.Exact(image.Pt(size, size))
+func iconLayout(gtx layout.Context, icon *widget.Icon, foreground color.NRGBA, size unit.Dp) layout.Dimensions {
+	px := min(gtx.Dp(size), gtx.Constraints.Max.X, gtx.Constraints.Max.Y)
+	gtx.Constraints = layout.Exact(image.Pt(px, px))
 	return icon.Layout(gtx, foreground)
 }
 
@@ -699,6 +815,14 @@ func selectionMark(gtx layout.Context, dims layout.Dimensions, foreground color.
 func (w *Widget) handleClicks(gtx layout.Context) {
 	if w.menu.Clicked(gtx) {
 		w.drawerOpen = !w.drawerOpen
+		if w.drawerOpen {
+			// A freshly opened compact drawer starts scrolled to the top.
+			// w.drawerList is also used by the permanent wide-mode drawer;
+			// carrying over a scroll position recorded at a very different
+			// viewport height can otherwise misplace the first row's
+			// semantics enough to make it briefly unreachable.
+			w.drawerList.Position = layout.Position{}
+		}
 	}
 	for _, item := range w.Model.Navigation {
 		if item.Enabled && w.clickable(w.navigation, item.ID).Clicked(gtx) {

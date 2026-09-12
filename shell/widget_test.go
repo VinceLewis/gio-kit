@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"strings"
 	"testing"
 
 	"gioui.org/f32"
@@ -440,5 +441,92 @@ func TestDisabledNavigationAndControlsRetainAccessibleRoles(t *testing.T) {
 	}
 	if _, err := d.Find(guitest.All(buttonNamed("Archive"), guitest.Selected(true))); err != nil {
 		t.Fatal("disabled selected destination lost selected state", err)
+	}
+}
+
+// Regression: the drawer's own widget.List position is shared between the
+// permanent wide-mode sidebar and the toggled compact overlay. Scrolling deep
+// into the sidebar at a short wide viewport, then resizing to a much taller
+// compact viewport and reopening the drawer, must not leave the first
+// destination briefly unreachable because of a stale scroll position carried
+// over from the very different viewport height.
+func TestCompactDrawerReopensReachableAfterWideScrollAndResize(t *testing.T) {
+	model := shell.Model{
+		Title: "Application", DrawerTitle: "Application", OpenNavigationLabel: "Open navigation", CloseNavigationLabel: "Close navigation",
+		Navigation: []shell.Item{{ID: "overview", Label: "Overview", Icon: shellIcon(t), Enabled: true, Selected: true}},
+	}
+	for i := 0; i < 14; i++ {
+		model.Navigation = append(model.Navigation, shell.Item{ID: fmt.Sprintf("page%02d", i), Label: fmt.Sprintf("Section %02d", i), Group: "Pages", Icon: shellIcon(t), Enabled: true})
+	}
+	w, err := shell.NewWidget(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	navigated := ""
+	w.OnNavigate = func(id string) {
+		navigated = id
+		for i := range w.Model.Navigation {
+			w.Model.Navigation[i].Selected = w.Model.Navigation[i].ID == id
+		}
+	}
+	theme := shellTheme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions {
+		return w.Layout(gtx, theme, func(layout.Context) layout.Dimensions { return layout.Dimensions{} })
+	}, guitest.Size(412, 915))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	// Scroll deep into the last destination at a short wide (permanent
+	// drawer) viewport.
+	if err := d.Resize(915, 320, unit.Metric{PxPerDp: 1, PxPerSp: 1}); err != nil {
+		t.Fatal(err)
+	}
+	last := guitest.All(guitest.Role(semantic.Button), guitest.Name("Section 13"))
+	for attempts := 0; attempts < 12; attempts++ {
+		if node, err := d.Find(last); err == nil && node.Desc.Bounds.In(image.Rect(0, 0, 915, 320)) {
+			break
+		}
+		var visible guitest.Selector
+		for _, node := range d.Nodes() {
+			if node.Desc.Class == semantic.Button && strings.HasPrefix(node.Desc.Label, "Section ") && node.Desc.Bounds.Min.Y >= 0 && node.Desc.Bounds.Max.Y <= 320 {
+				visible = guitest.All(guitest.Role(semantic.Button), guitest.Label(node.Desc.Label))
+				break
+			}
+		}
+		if visible == nil {
+			t.Fatal("short wide drawer has no reachable navigation item")
+		}
+		if err := d.Scroll(visible, f32.Pt(0, 220)); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Settle(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.Tap(last); err != nil {
+		t.Fatal(err)
+	}
+	if navigated != "page13" {
+		t.Fatal("last destination was unreachable at the short wide viewport")
+	}
+
+	// Resize to a much taller compact viewport and reopen the drawer: the
+	// first destination must be immediately reachable again.
+	if err := d.Resize(412, 915, unit.Metric{PxPerDp: 1, PxPerSp: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Tap(guitest.Description("Open navigation")); err != nil {
+		t.Fatal(err)
+	}
+	if !w.DrawerOpen() {
+		t.Fatal("compact drawer did not reopen")
+	}
+	if err := d.Tap(buttonNamed("Overview")); err != nil {
+		t.Fatalf("first destination was unreachable after reopening the compact drawer: %v", err)
+	}
+	if navigated != "overview" || w.DrawerOpen() {
+		t.Fatal("routed navigation did not select the first destination and close the drawer")
 	}
 }

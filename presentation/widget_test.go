@@ -10,6 +10,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/VinceLewis/gio-kit/theme"
 )
 
 func TestComposedWidgetLaysOutAtNarrowAndWideWidths(t *testing.T) {
@@ -52,13 +53,14 @@ func TestActionAndIconLabelKeepIntrinsicContentWithinTouchTarget(t *testing.T) {
 		var operations op.Ops
 		gtx := layout.Context{Ops: &operations, Metric: unit.Metric{PxPerDp: density, PxPerSp: density}}
 		gtx.Constraints = layout.Constraints{Min: image.Pt(0, gtx.Dp(48)), Max: image.Pt(gtx.Dp(320), gtx.Dp(100))}
-		w, theme := NewWidget(Page{}), material.NewTheme()
-		label := w.iconLabel(gtx, theme, "check", "Create", theme.Fg)
+		w, th := NewWidget(Page{}), material.NewTheme()
+		m := theme.Comfortable()
+		label := w.iconLabel(gtx, th, m, "check", "Create", th.Fg)
 		if label.Size.Y >= gtx.Dp(48) {
 			t.Fatalf("icon/label inherited touch-target height at density %v: %v", density, label.Size)
 		}
 		operations.Reset()
-		button := w.actionButton(gtx, theme, new(widget.Clickable), Action{Label: "Create", Icon: "check", Enabled: true})
+		button := w.actionButton(gtx, th, m, new(widget.Clickable), Action{Label: "Create", Icon: "check", Enabled: true})
 		if button.Size.Y != gtx.Dp(48) {
 			t.Fatalf("action padding inflated 48dp touch target at density %v: %v", density, button.Size)
 		}

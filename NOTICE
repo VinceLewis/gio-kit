@@ -6,3 +6,12 @@ Copyright 2026 Vince Lewis.
 When Gio Kit is redistributed, retain the BSD-3-Clause copyright and license
 notice as required by LICENSE. Crediting the repository URL above in product
 credits or documentation is appreciated.
+
+## Third-party code
+
+`presentation/silent_text.go` contains text-layout code derived from
+`gioui.org/widget.Label` (SPDX-License-Identifier: Unlicense OR MIT), copied so
+a row fragment can paint without contributing its own semantic node. The file
+carries the upstream SPDX identifier. Re-check it against upstream whenever the
+pinned `gioui.org` version changes: it duplicates upstream internals and will
+not track upstream fixes on its own.

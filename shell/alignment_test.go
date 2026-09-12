@@ -39,7 +39,7 @@ func TestIconAndLabelCenterWithinAccessibleRow(t *testing.T) {
 						return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return (accessibility.Group{Label: "Icon geometry"}).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return iconLayout(gtx, icon, theme.Fg)
+									return iconLayout(gtx, icon, theme.Fg, unit.Dp(20))
 								})
 							}),
 							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {

@@ -8,6 +8,7 @@ import (
 
 	"gioui.org/unit"
 	"gioui.org/widget"
+	"github.com/VinceLewis/gio-kit/theme"
 )
 
 type Mode uint8
@@ -64,9 +65,17 @@ type Model struct {
 	PageTitle      string
 	Navigation     []Item
 	TopBar, Drawer []Control
+	// Metrics supplies application-neutral visual geometry. The zero value
+	// uses the built-in theme profiles, preserving existing callers' geometry.
+	Metrics theme.Set
+	// Density selects the profile. An empty value uses the Set's own default.
+	Density string
 }
 
 func (m Model) Validate() error {
+	if err := theme.ValidateDensity(m.Density); err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	for _, item := range m.Navigation {
 		if item.ID == "" || item.Label == "" {

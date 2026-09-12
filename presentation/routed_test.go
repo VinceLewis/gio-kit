@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"unicode"
 
 	"gioui.org/font/gofont"
 	"gioui.org/io/input"
@@ -198,4 +199,281 @@ func TestSemanticIconVocabularyAndUnknownFallback(t *testing.T) {
 	if presentation.SemanticIcon("unknown-future-icon") != nil {
 		t.Fatal("unknown icon should defer to the text label")
 	}
+}
+
+func compactToggleControlsPage() presentation.Page {
+	return presentation.Page{Sections: []presentation.Section{{
+		Controls: []presentation.Control{
+			{ID: "one", Kind: "toggle", Label: "One", Icon: "check", Enabled: true},
+			{ID: "two", Kind: "toggle", Label: "Two", Icon: "calendar", Enabled: true},
+			{ID: "three", Kind: "toggle", Label: "Three", Icon: "users", Enabled: true},
+		},
+	}}}
+}
+
+// HUF-04 acceptance: at both a 412dp and a 360dp portrait width, three
+// compact toggles occupy one visual row, stay inside the viewport, do not
+// overlap, and each exposes a target of at least 48dp.
+func TestCompactControlsOccupyOneRowAtPhoneWidths(t *testing.T) {
+	th := presentationTheme()
+	for _, width := range []int{412, 360} {
+		w := presentation.NewWidget(compactToggleControlsPage())
+		d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) }, guitest.Size(width, 800))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bounds []image.Rectangle
+		var tops []int
+		for _, label := range []string{"One", "Two", "Three"} {
+			node, err := d.Find(guitest.All(guitest.Role(semantic.Switch), guitest.Name(label)))
+			if err != nil {
+				t.Fatalf("%s at width %d: %v", label, width, err)
+			}
+			b := node.Desc.Bounds
+			if b.Dx() < 48 || b.Dy() < 48 {
+				t.Fatalf("%s target under 48dp at width %d: %v", label, width, b)
+			}
+			if !b.In(image.Rectangle{Max: image.Pt(width, 800)}) {
+				t.Fatalf("%s target outside the viewport at width %d: %v", label, width, b)
+			}
+			for _, previous := range bounds {
+				if !b.Intersect(previous).Empty() {
+					t.Fatalf("compact toggles overlap at width %d", width)
+				}
+			}
+			bounds = append(bounds, b)
+			tops = append(tops, b.Min.Y)
+		}
+		if tops[0] != tops[1] || tops[1] != tops[2] {
+			t.Fatalf("three compact toggles did not share one visual row at width %d: tops=%v", width, tops)
+		}
+		if err := d.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// HUF-04 acceptance: when the equal-column arrangement no longer fits — a
+// narrower width, or an enlarged font scale — the toggles wrap between
+// complete controls: each remains non-overlapping and at least 48dp, but they
+// no longer share one row.
+func TestCompactControlsWrapBetweenCompleteControlsWhenTooNarrowOrFontEnlarged(t *testing.T) {
+	th := presentationTheme()
+	cases := []struct {
+		name   string
+		width  int
+		metric unit.Metric
+	}{
+		{"narrow width", 180, unit.Metric{PxPerDp: 1, PxPerSp: 1}},
+		{"enlarged font", 412, unit.Metric{PxPerDp: 1, PxPerSp: 2.6}},
+	}
+	for _, c := range cases {
+		w := presentation.NewWidget(compactToggleControlsPage())
+		d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) }, guitest.Size(c.width, 900), guitest.Metrics(c.metric))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bounds []image.Rectangle
+		var tops []int
+		for _, label := range []string{"One", "Two", "Three"} {
+			node, err := d.Find(guitest.All(guitest.Role(semantic.Switch), guitest.Name(label)))
+			if err != nil {
+				t.Fatalf("%s (%s): %v", label, c.name, err)
+			}
+			b := node.Desc.Bounds
+			if b.Dx() < 48 || b.Dy() < 48 {
+				t.Fatalf("%s (%s) target under 48dp: %v", label, c.name, b)
+			}
+			for _, previous := range bounds {
+				if !b.Intersect(previous).Empty() {
+					t.Fatalf("controls overlap (%s): %v", c.name, b)
+				}
+			}
+			bounds = append(bounds, b)
+			tops = append(tops, b.Min.Y)
+		}
+		if tops[0] == tops[1] && tops[1] == tops[2] {
+			t.Fatalf("controls did not wrap (%s): tops=%v", c.name, tops)
+		}
+		if err := d.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Requirement 9: routed input still works in both list styles — tapping a
+// row action and toggling a control still deliver the right Event.
+func TestRoutedInputWorksInBothListStyles(t *testing.T) {
+	for _, style := range []string{presentation.ListStyleDefault, presentation.ListStyleCompactFeed} {
+		page := presentation.Page{Sections: []presentation.Section{{
+			Controls: []presentation.Control{{ID: "flag", Kind: "toggle", Label: "Flag", Enabled: true}},
+			Lists: []presentation.List{{ID: "list", Style: style, Rows: []presentation.Row{{
+				ID: "row-1", StatusLabel: "Ready", StatusIcon: "check",
+				Fragments: []presentation.Fragment{{Kind: "field", Text: "Title", Style: "bold"}},
+				Actions:   []presentation.Action{{ID: "open", Label: "Open", Enabled: true}},
+			}}}},
+		}}}
+		w := presentation.NewWidget(page)
+		var events []presentation.Event
+		w.OnEvent = func(e presentation.Event) { events = append(events, e) }
+		th := presentationTheme()
+		d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) }, guitest.Size(360, 640))
+		if err != nil {
+			t.Fatalf("%s: %v", style, err)
+		}
+		if err := d.Tap(guitest.All(guitest.Role(semantic.Switch), guitest.Name("Flag"))); err != nil {
+			t.Fatalf("%s: toggle tap: %v", style, err)
+		}
+		if len(events) != 1 || events[0].ID != "flag" || events[0].Kind != presentation.EventControl {
+			t.Fatalf("%s: toggle event = %#v", style, events)
+		}
+		if err := d.Tap(guitest.All(guitest.Role(semantic.Button), guitest.Name("Open"))); err != nil {
+			t.Fatalf("%s: action tap: %v", style, err)
+		}
+		if len(events) != 2 || events[1].ID != "open" || events[1].RowID != "row-1" || events[1].Kind != presentation.EventAction {
+			t.Fatalf("%s: action event = %#v", style, events)
+		}
+		if err := d.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Requirement 6: an unknown icon name falls back to meaningful text, not a
+// missing glyph, in the compactFeed rendering too.
+func TestFeedRowUnknownIconFallsBackToAccessibleText(t *testing.T) {
+	page := presentation.Page{Sections: []presentation.Section{{Lists: []presentation.List{{
+		ID: "list", Style: presentation.ListStyleCompactFeed,
+		Rows: []presentation.Row{{
+			ID: "row-1",
+			Fragments: []presentation.Fragment{
+				{Kind: "icon", Icon: "not-a-real-icon", AccessibleLabel: "Reminder"},
+				{Kind: "field", Text: "Weekly Sync", Style: "bold"},
+			},
+		}},
+	}}}}}
+	w := presentation.NewWidget(page)
+	th := presentationTheme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) }, guitest.Size(360, 640))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Find(guitest.Label("Reminder")); err != nil {
+		t.Fatalf("unknown icon did not fall back to its accessible text: %v; nodes: %+v", err, d.Nodes())
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Acceptance criterion 5, semantic side: inside a feed row, the ordered
+// rich-text run presents as one accessible unit (the row group), not one
+// semantic node per fragment. No node anywhere in the rendered page may carry
+// a non-empty label with no letter or digit — the same global check the
+// consumer's routed suite applies — covering both a separator that
+// legitimately sits between two present values (the reported defect) and the
+// pre-existing blank-value case. A paired positive assertion confirms the row
+// group itself still announces every summary value and the status, so the
+// fix is a suppression of duplicate nodes, not of content.
+func TestFeedRowFragmentsPresentAsOneAccessibleUnit(t *testing.T) {
+	rows := []presentation.Row{
+		{
+			ID: "between-present-values",
+			Fragments: []presentation.Fragment{
+				{Kind: "field", Text: "Weekly Sync", Style: "bold"},
+				{Kind: "text", Text: " - ", Style: "muted"},
+				{Kind: "field", Text: "Main Hall", Style: "muted"},
+			},
+			StatusLabel: "Confirmed", StatusIcon: "check",
+		},
+		{
+			ID: "blank-middle-and-trailing",
+			Fragments: []presentation.Fragment{
+				{Kind: "field", Text: "Weekly Sync", Style: "bold"},
+				{Kind: "text", Text: " - ", Style: "muted"},
+				{Kind: "field", Text: "   ", Style: "muted"},
+				{Kind: "text", Text: " - ", Style: "muted"},
+				{Kind: "field", Text: "Main Hall", Style: "muted"},
+				{Kind: "text", Text: " - ", Style: "muted"},
+				{Kind: "field", Text: ""},
+			},
+		},
+	}
+	page := presentation.Page{Sections: []presentation.Section{{Lists: []presentation.List{{
+		ID: "list", Style: presentation.ListStyleCompactFeed, Rows: rows,
+	}}}}}
+	w := presentation.NewWidget(page)
+	th := presentationTheme()
+	d, err := guitest.New(func(gtx layout.Context) layout.Dimensions { return w.Layout(gtx, th) }, guitest.Size(360, 900))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	// Positive: the row group still announces every summary value and the
+	// status — the fix must not have suppressed everything.
+	group, err := d.Find(func(n guitest.Node) bool {
+		return containsAll(n.Desc.Label, "Weekly Sync", "Main Hall", "Confirmed")
+	})
+	if err != nil {
+		t.Fatalf("row group no longer announces its summary values and status: %v; nodes: %+v", err, d.Nodes())
+	}
+	if group.Desc.Label == "" {
+		t.Fatal("row group label is empty")
+	}
+
+	// Negative: no node anywhere — including the reported separator-between-
+	// present-values case and the pre-existing blank-value case — carries a
+	// non-empty label with no letter or digit, and none starts or ends on an
+	// orphan separator.
+	for _, node := range d.Nodes() {
+		label := strings.TrimSpace(node.Desc.Label)
+		if label == "" {
+			continue
+		}
+		if !containsLetterOrDigit(label) {
+			t.Fatalf("semantic node has a punctuation/whitespace-only label: %q", label)
+		}
+		if isSeparatorOnly(firstSeparatedToken(label, true)) || isSeparatorOnly(firstSeparatedToken(label, false)) {
+			t.Fatalf("semantic node starts or ends on an orphan separator: %q", label)
+		}
+	}
+}
+
+func containsAll(haystack string, needles ...string) bool {
+	for _, needle := range needles {
+		if !strings.Contains(haystack, needle) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsLetterOrDigit(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstSeparatedToken returns the first (leading=true) or last (leading=false)
+// whitespace-separated token of s.
+func firstSeparatedToken(s string, leading bool) string {
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	if leading {
+		return fields[0]
+	}
+	return fields[len(fields)-1]
+}
+
+// isSeparatorOnly reports whether token is non-empty and contains no letter
+// or digit — the same structural definition of a separator used by
+// filterFeedFragments, applied here to a rendered/semantic token.
+func isSeparatorOnly(token string) bool {
+	return token != "" && !containsLetterOrDigit(token)
 }
