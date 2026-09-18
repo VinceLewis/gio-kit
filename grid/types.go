@@ -43,6 +43,15 @@ func ResolveViewMode(mode ViewMode, width, breakpoint unit.Dp) ViewMode {
 	return ViewTable
 }
 
+// ResolvedViewModeName renders a resolved (never ViewAuto) mode as the
+// lowercase name diagnostic/testing consumers key on: "table" or "cards".
+func ResolvedViewModeName(mode ViewMode) string {
+	if mode == ViewCards {
+		return "cards"
+	}
+	return "table"
+}
+
 type FilterKind uint8
 
 const (

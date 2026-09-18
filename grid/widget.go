@@ -49,6 +49,11 @@ type Widget struct {
 	measuredOpen     map[string]bool
 	measuredOpenID   string
 	minimumOpenWidth unit.Dp
+
+	// lastResolvedViewMode caches the presentation Layout chose on its most
+	// recent call, so DebugSnapshot (which has no layout.Context) can report
+	// it without re-deriving width from stale state.
+	lastResolvedViewMode ViewMode
 	selectAll        widget.Bool
 	actions          map[string]*widget.Clickable
 	retry            widget.Clickable
@@ -87,7 +92,8 @@ func (w *Widget) Layout(gtx layout.Context, theme *material.Theme) layout.Dimens
 	}
 	snapshot := w.Controller.Snapshot()
 	visible := visibleColumns(snapshot.Columns)
-	if w.ResolvedViewMode(gtx) == ViewCards {
+	w.lastResolvedViewMode = w.ResolvedViewMode(gtx)
+	if w.lastResolvedViewMode == ViewCards {
 		return w.layoutCards(gtx, theme, snapshot, visible)
 	}
 	return w.layoutTable(gtx, theme, snapshot, visible)

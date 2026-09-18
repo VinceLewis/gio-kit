@@ -54,7 +54,7 @@ func schemaFor(t reflect.Type) map[string]any {
 			}
 		}
 		if t == reflect.TypeOf(FrameNode{}) {
-			for name, choices := range map[string][]string{"role": {"unknown", "button", "checkbox", "editor", "radio", "switch"}, "visibility": {"unknown", "visible", "partially_visible", "clipped", "covered", "virtualized"}, "viewportVisibility": {"visible", "partially_visible", "clipped"}, "coverage": {"unknown", "covered", "uncovered"}, "interactable": {"unknown", "yes", "no"}} {
+			for name, choices := range map[string][]string{"role": {"unknown", "button", "checkbox", "editor", "radio", "switch", "columnHeader", "card", "picker", "tab", "dialog", "drawer"}, "visibility": {"unknown", "visible", "partially_visible", "clipped", "covered", "virtualized"}, "viewportVisibility": {"visible", "partially_visible", "clipped"}, "coverage": {"unknown", "covered", "partially_covered", "uncovered"}, "interactable": {"unknown", "yes", "no"}} {
 				properties[name] = map[string]any{"type": "string", "enum": choices}
 			}
 		}

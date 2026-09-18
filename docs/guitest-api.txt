@@ -7,7 +7,7 @@ workflows; Android behavior still requires device acceptance.
 
 CONSTANTS
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 VARIABLES
 
@@ -233,15 +233,22 @@ func (d *Driver) WaitFor(ctx context.Context, predicate func() bool) error
     loading/error states without requiring the whole application to become idle.
 
 type Dump struct {
-	Version       int                             `json:"version"`
-	Frame         uint64                          `json:"frame"`
-	Time          time.Time                       `json:"time"`
-	Viewport      Bounds                          `json:"viewport"`
-	Metrics       map[string]float32              `json:"metrics"`
-	Locale        map[string]string               `json:"locale"`
-	Orientation   string                          `json:"orientation"`
-	Focus         string                          `json:"focus"`
-	Idle          *bool                           `json:"idle"`
+	Version     int                `json:"version"`
+	Frame       uint64             `json:"frame"`
+	Time        time.Time          `json:"time"`
+	Viewport    Bounds             `json:"viewport"`
+	Metrics     map[string]float32 `json:"metrics"`
+	Locale      map[string]string  `json:"locale"`
+	Orientation string             `json:"orientation"`
+	Focus       string             `json:"focus"`
+	Idle        *bool              `json:"idle"`
+	// FocusOrder lists node IDs in traversal order. Gio's input.Router
+	// (and the wider gioui.org/io/input package) exposes no explicit
+	// tab/focus order query, so this is approximated from paint order —
+	// the same order as Nodes — as a documented first-pass approximation.
+	// It is NOT a verified platform tab order; only a real device/TalkBack
+	// session can prove actual keyboard or accessibility traversal order.
+	FocusOrder    []string                        `json:"focusOrder,omitempty"`
 	PendingTimers int                             `json:"pendingTimers"`
 	Nodes         []FrameNode                     `json:"nodes"`
 	Components    map[string]diagnostic.Component `json:"components"`
@@ -289,6 +296,22 @@ type FrameNode struct {
 	Selected             bool     `json:"selected"`
 	Interactable         string   `json:"interactable"`
 	Actions              []string `json:"actions"`
+	// Valid, when known, mirrors a form field's own validation state (see
+	// form.Field.Error via Form.DebugSnapshot). It is nil for nodes that are
+	// not matched to a component field that reports validity today.
+	Valid *bool `json:"valid,omitempty"`
+	// ErrorMessage carries a matched component's existing validation error
+	// text (currently only form fields, via form.Form.DebugSnapshot's
+	// per-field "validation" state). It is empty when no owning component
+	// surfaces an error for this node.
+	ErrorMessage string `json:"errorMessage,omitempty"`
+	// DisabledReason carries a matched component's existing disabled-reason
+	// text (shell.Control/shell.Item.DisabledReason and
+	// picker.Option.DisabledReason, both already surfaced by their
+	// DebugSnapshot implementations). grid and dialog do not yet surface a
+	// per-node disabled reason from their DebugSnapshot, so this remains
+	// empty for their nodes until those packages add one.
+	DisabledReason string `json:"disabledReason,omitempty"`
 }
 
 type Harness struct {

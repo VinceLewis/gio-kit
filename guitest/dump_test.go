@@ -66,12 +66,27 @@ func TestDumpDeterminismRedactionAndBounds(t *testing.T) {
 	if _, err := guitest.ReadDump(bytes.NewReader(first.Bytes()), 0); err != nil {
 		t.Fatal("schema compatibility:", err)
 	}
-	if dump.Version != 1 || !dump.Truncated || dump.Focus != "unknown" {
+	if dump.Version != 2 || !dump.Truncated || dump.Focus != "unknown" {
 		t.Fatalf("invalid dump metadata: %+v", dump)
 	}
+	validCoverage := map[string]bool{"unknown": true, "covered": true, "partially_covered": true, "uncovered": true}
 	for _, node := range dump.Nodes {
-		if node.ClipBounds != nil || node.Coverage != "unknown" {
+		if node.ClipBounds != nil {
 			t.Fatal("invented geometry")
+		}
+		if !validCoverage[node.Coverage] {
+			t.Fatalf("node %s has invalid coverage %q", node.ID, node.Coverage)
+		}
+		if node.Valid != nil || node.ErrorMessage != "" {
+			t.Fatal("sensitive form field validity/error must not be inferred")
+		}
+	}
+	if len(dump.FocusOrder) != len(dump.Nodes) {
+		t.Fatalf("focus order length = %d, want %d", len(dump.FocusOrder), len(dump.Nodes))
+	}
+	for i, node := range dump.Nodes {
+		if dump.FocusOrder[i] != node.ID {
+			t.Fatalf("focus order[%d] = %s, want paint-order id %s", i, dump.FocusOrder[i], node.ID)
 		}
 	}
 	var untouched bytes.Buffer

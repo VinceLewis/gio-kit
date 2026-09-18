@@ -80,6 +80,37 @@ system bars and insets, native Back dispatch, rotation/split-window delivery,
 document providers, clipboard policy, background/resume, OS process death,
 installation/signing behavior, ANRs, and visual quality.
 
+## Required checks for every new production-root test
+
+`gio-json-test-upgrade-plan.md`'s five-item checklist below describes the
+target end state for `guitest`-based tests. Of the schema groundwork it
+depends on, only items 1, 2, 5, 6, and 10 from that plan's expert-panel list
+(real `Coverage` occlusion, the `Role` enum extension, per-node
+validation/disabled-reason fields, and the `FocusOrder` field) are
+implemented so far; the default accessibility check (item 3), per-node
+foreground/background color (item 4), the reachability property-test
+generator (item 7), golden dumps (item 8), and `guitestgpu` perceptual
+diffing (item 9) referenced below are not implemented yet and remain future
+work from the same plan.
+
+1. Any new or changed screen must call `assertTreeShape` (ADL-Gio's helper,
+   once landed in `harness_support_test.go`) across all four responsive
+   cases — not just the default device size.
+2. Every `Capture`/`DumpJSON` call in a new test must also pass through the
+   default accessibility check (item 3) — this happens automatically once it
+   ships as a `guitest` default, so the instruction becomes "do not suppress
+   it," not "remember to call it."
+3. Any screen exposing a declared, policy-permitted operation must be
+   covered by the reachability property test (item 7) rather than a
+   hand-written "control exists" assertion, once the generator exists.
+4. A golden dump may be added for review convenience but never as the only
+   assertion for a change (item 8) — reviewers should reject a diff whose
+   only evidence is an updated golden file with no accompanying structural
+   assertion change.
+5. Reach for `guitestgpu` screenshot checkpoints only for defects structural
+   checks cannot express (color/font rendering) and name the checkpoint's
+   purpose in the test — not as a default for new screens.
+
 ## Architecture
 
 ```text

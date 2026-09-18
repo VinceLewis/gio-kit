@@ -45,6 +45,11 @@ func (w *Widget) DebugSnapshot(request diagnostic.Request) diagnostic.Component 
 	first, end := w.List.Position.First, w.List.Position.First+w.List.Position.Count
 	result.State["renderedRange"] = []int{first, end}
 	result.State["scroll"] = map[string]any{"first": first, "offset": w.List.Position.Offset, "horizontalFirst": w.Horizontal.Position.First, "horizontalOffset": w.Horizontal.Position.Offset}
+	// resolvedViewMode reports the mode Layout actually rendered on its most
+	// recent call (see Widget.lastResolvedViewMode), so callers such as
+	// guitest.Capture can tell a card row from a table row without guessing
+	// from label text.
+	result.State["resolvedViewMode"] = ResolvedViewModeName(w.lastResolvedViewMode)
 	for _, value := range result.State["rows"].([]any) {
 		row := value.(map[string]any)
 		i := row["index"].(int)

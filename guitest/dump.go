@@ -7,6 +7,7 @@ import (
 	"image"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"gioui.org/io/input"
@@ -14,7 +15,7 @@ import (
 	"github.com/VinceLewis/gio-kit/diagnostic"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 var ErrOutputLimit = errors.New("guitest: diagnostic output exceeds byte limit")
 
@@ -72,18 +73,41 @@ type FrameNode struct {
 	Selected             bool     `json:"selected"`
 	Interactable         string   `json:"interactable"`
 	Actions              []string `json:"actions"`
+	// Valid, when known, mirrors a form field's own validation state (see
+	// form.Field.Error via Form.DebugSnapshot). It is nil for nodes that are
+	// not matched to a component field that reports validity today.
+	Valid *bool `json:"valid,omitempty"`
+	// ErrorMessage carries a matched component's existing validation error
+	// text (currently only form fields, via form.Form.DebugSnapshot's
+	// per-field "validation" state). It is empty when no owning component
+	// surfaces an error for this node.
+	ErrorMessage string `json:"errorMessage,omitempty"`
+	// DisabledReason carries a matched component's existing disabled-reason
+	// text (shell.Control/shell.Item.DisabledReason and
+	// picker.Option.DisabledReason, both already surfaced by their
+	// DebugSnapshot implementations). grid and dialog do not yet surface a
+	// per-node disabled reason from their DebugSnapshot, so this remains
+	// empty for their nodes until those packages add one.
+	DisabledReason string `json:"disabledReason,omitempty"`
 }
 
 type Dump struct {
-	Version       int                             `json:"version"`
-	Frame         uint64                          `json:"frame"`
-	Time          time.Time                       `json:"time"`
-	Viewport      Bounds                          `json:"viewport"`
-	Metrics       map[string]float32              `json:"metrics"`
-	Locale        map[string]string               `json:"locale"`
-	Orientation   string                          `json:"orientation"`
-	Focus         string                          `json:"focus"`
-	Idle          *bool                           `json:"idle"`
+	Version     int                 `json:"version"`
+	Frame       uint64              `json:"frame"`
+	Time        time.Time           `json:"time"`
+	Viewport    Bounds              `json:"viewport"`
+	Metrics     map[string]float32  `json:"metrics"`
+	Locale      map[string]string   `json:"locale"`
+	Orientation string              `json:"orientation"`
+	Focus       string              `json:"focus"`
+	Idle        *bool               `json:"idle"`
+	// FocusOrder lists node IDs in traversal order. Gio's input.Router
+	// (and the wider gioui.org/io/input package) exposes no explicit
+	// tab/focus order query, so this is approximated from paint order —
+	// the same order as Nodes — as a documented first-pass approximation.
+	// It is NOT a verified platform tab order; only a real device/TalkBack
+	// session can prove actual keyboard or accessibility traversal order.
+	FocusOrder    []string                        `json:"focusOrder,omitempty"`
 	PendingTimers int                             `json:"pendingTimers"`
 	Nodes         []FrameNode                     `json:"nodes"`
 	Components    map[string]diagnostic.Component `json:"components"`
@@ -123,6 +147,23 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error) {
 		}
 	}
 	sensitiveLabels := make(map[string]bool)
+	// hints are matched against a node's own pre-redaction label, the same
+	// best-effort join `sensitiveLabels` above already relies on: nothing in
+	// today's Provider interface (diagnostic.Provider) or in the semantic
+	// tree (input.SemanticDesc) links a node back to the provider name that
+	// rendered it, so gio-kit cannot yet scope these hints to "this node
+	// belongs to component X" more precisely than "this label was reported
+	// by a component of kind K". A future provider API could close this gap;
+	// until then, treat these as approximate, not authoritative.
+	roleHints, errorHints, disabledReasonHints := map[string]string{}, map[string]string{}, map[string]string{}
+	validHints := map[string]bool{}
+	kindsPresent := map[string]bool{}
+	gridCardMode := false
+	addString := func(m map[string]string, key, value string) {
+		if key != "" && value != "" {
+			m[key] = value
+		}
+	}
 	for _, name := range names {
 		provider := d.app.Providers[name]
 		if provider == nil {
@@ -133,6 +174,105 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error) {
 		for _, label := range component.SensitiveLabels {
 			if label != "" {
 				sensitiveLabels[label] = true
+			}
+		}
+		kindsPresent[component.Kind] = true
+		// Best-effort role/reason/validity hints, derived only from state
+		// each component already exposes through its existing DebugSnapshot
+		// (no new provider API is introduced here). gioui.org/io/semantic
+		// has no distinct ClassOp for column headers, cards, pickers, tabs,
+		// dialogs or drawers (semantic.ClassOp is generic: button, checkbox,
+		// editor, radio, switch), so those roles cannot come from
+		// n.Desc.Class alone; they are inferred below from each component's
+		// own reported state instead.
+		switch component.Kind {
+		case "form":
+			// form.Form.DebugSnapshot already reports each field's label,
+			// its validation error (nil when valid) and whether the field
+			// itself is private; skip private fields so an error message
+			// or validity bit can never leak text a redacted node hides.
+			if fields, ok := component.State["fields"].([]any); ok {
+				for _, entry := range fields {
+					field, ok := entry.(map[string]any)
+					if !ok {
+						continue
+					}
+					label, _ := field["label"].(string)
+					if label == "" || sensitiveLabels[label] {
+						continue
+					}
+					valid := true
+					if err, ok := field["validation"].(error); ok && err != nil {
+						addString(errorHints, label, err.Error())
+						valid = false
+					}
+					validHints[label] = valid
+				}
+			}
+		case "shell":
+			// shell.Widget.DebugSnapshot already reports each control's
+			// label and DisabledReason; drawerControls specifically
+			// identifies drawer items, which is the only sub-role gio-kit's
+			// shell component makes distinguishable today. Shell has no
+			// widget backing a "tab" role yet (its wide-mode navigation
+			// rail reuses the same drawer-item rendering), so "tab" cannot
+			// be populated from this component.
+			if controls, ok := component.State["topBar"].([]any); ok {
+				for _, entry := range controls {
+					if control, ok := entry.(map[string]any); ok {
+						label, _ := control["label"].(string)
+						reason, _ := control["disabledReason"].(string)
+						if label != "" && !sensitiveLabels[label] {
+							addString(disabledReasonHints, label, reason)
+						}
+					}
+				}
+			}
+			if controls, ok := component.State["drawerControls"].([]any); ok {
+				for _, entry := range controls {
+					if control, ok := entry.(map[string]any); ok {
+						label, _ := control["label"].(string)
+						reason, _ := control["disabledReason"].(string)
+						if label != "" && !sensitiveLabels[label] {
+							roleHints[label] = "drawer"
+							addString(disabledReasonHints, label, reason)
+						}
+					}
+				}
+			}
+		case "picker":
+			// picker.Widget.DebugSnapshot already reports each option's
+			// label and DisabledReason. Every option is tagged role
+			// "picker"; gio-kit has no separate node for the picker as a
+			// whole (its search field keeps role "editor").
+			if options, ok := component.State["options"].([]any); ok {
+				for _, entry := range options {
+					if option, ok := entry.(map[string]any); ok {
+						label, _ := option["label"].(string)
+						reason, _ := option["disabledReason"].(string)
+						if label != "" && !sensitiveLabels[label] {
+							roleHints[label] = "picker"
+							addString(disabledReasonHints, label, reason)
+						}
+					}
+				}
+			}
+		case "dialog":
+			// dialog.Confirm.DebugSnapshot reports "title", which is also
+			// the accessible label dialog.Confirm's accessibility.Group
+			// applies to its whole content (see accessibility.Group.Layout,
+			// which sets no semantic.ClassOp, so roleName would otherwise
+			// leave it "unknown").
+			if title, ok := component.State["title"].(string); ok && title != "" {
+				roleHints[title] = "dialog"
+			}
+		case "grid":
+			// grid.Widget.DebugSnapshot reports resolvedViewMode ("cards" or
+			// "table"), the actual presentation Layout chose last frame, so
+			// a card row can be told apart from a table row without
+			// guessing from label text.
+			if mode, ok := component.State["resolvedViewMode"].(string); ok && mode == "cards" {
+				gridCardMode = true
 			}
 		}
 		if o.Component != "" && name != o.Component {
@@ -197,14 +337,50 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error) {
 		if !node.Enabled || intersection.Empty() || len(node.Actions) == 0 {
 			node.Interactable = "no"
 		}
+		if !sensitive {
+			// Grid renders both column-sort headers/menus and row/card
+			// entries as plain semantic.Button nodes with a distinctive
+			// label prefix (see grid/widget.go, grid/card_layout.go,
+			// grid/row_layout.go). "Sort by " labels a table column header
+			// in table mode but a card-mode sort *menu trigger* in card
+			// mode (not a column header), and "Open " labels a row-open
+			// target in both modes; gridCardMode (from the grid
+			// component's resolvedViewMode, see above) disambiguates both.
+			if kindsPresent["grid"] {
+				switch {
+				case !gridCardMode && strings.HasPrefix(n.Desc.Label, "Sort by "):
+					node.Role = "columnHeader"
+				case gridCardMode && strings.HasPrefix(n.Desc.Label, "Open "):
+					node.Role = "card"
+				}
+			}
+			if hint, ok := roleHints[n.Desc.Label]; ok {
+				node.Role = hint
+			}
+			if valid, ok := validHints[n.Desc.Label]; ok {
+				v := valid
+				node.Valid = &v
+			}
+			node.ErrorMessage = errorHints[n.Desc.Label]
+			node.DisabledReason = disabledReasonHints[n.Desc.Label]
+		}
 		if sensitive {
 			node.Label, node.Description = diagnostic.Redacted, diagnostic.Redacted
 		}
 		node.Label = s.text("nodes."+node.ID+".label", node.Label)
 		node.Description = s.text("nodes."+node.ID+".description", node.Description)
+		node.ErrorMessage = s.text("nodes."+node.ID+".errorMessage", node.ErrorMessage)
+		node.DisabledReason = s.text("nodes."+node.ID+".disabledReason", node.DisabledReason)
 		result.Nodes = append(result.Nodes, node)
 	}
 	result.Truncated = s.truncated
+	// FocusOrder is approximated from paint order (see the field's doc
+	// comment): Nodes above are already appended in d.nodes iteration order.
+	result.FocusOrder = make([]string, len(result.Nodes))
+	for i, node := range result.Nodes {
+		result.FocusOrder[i] = node.ID
+	}
+	computeCoverage(result.Nodes)
 	// Apply the byte cap to Capture as well as DumpJSON. No partial dump escapes.
 	data, err := json.Marshal(result)
 	if err != nil {
@@ -214,6 +390,62 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error) {
 		return Dump{}, ErrOutputLimit
 	}
 	return result, nil
+}
+
+// computeCoverage marks each node "covered" when a later-painted node (Gio
+// paints in document order, so later index means painted on top) that is
+// neither its ancestor nor its descendant fully contains its
+// ViewportIntersection, "partially_covered" for a non-empty but partial
+// overlap, and leaves "unknown" nodes (empty ViewportIntersection, already
+// clipped) untouched. It mutates nodes in place.
+func computeCoverage(nodes []FrameNode) {
+	parent := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		parent[n.ID] = n.Parent
+	}
+	related := func(a, b string) bool {
+		for p := parent[a]; p != ""; p = parent[p] {
+			if p == b {
+				return true
+			}
+		}
+		for p := parent[b]; p != ""; p = parent[p] {
+			if p == a {
+				return true
+			}
+		}
+		return false
+	}
+	rect := func(n FrameNode) image.Rectangle {
+		return image.Rect(n.ViewportIntersection.X, n.ViewportIntersection.Y,
+			n.ViewportIntersection.X+n.ViewportIntersection.Width,
+			n.ViewportIntersection.Y+n.ViewportIntersection.Height)
+	}
+	for i := range nodes {
+		r := rect(nodes[i])
+		if r.Empty() {
+			continue
+		}
+		nodes[i].Coverage = "uncovered"
+		for j := i + 1; j < len(nodes); j++ {
+			if related(nodes[i].ID, nodes[j].ID) {
+				continue
+			}
+			other := rect(nodes[j])
+			if other.Empty() {
+				continue
+			}
+			overlap := r.Intersect(other)
+			if overlap.Empty() {
+				continue
+			}
+			if overlap == r {
+				nodes[i].Coverage = "covered"
+				break
+			}
+			nodes[i].Coverage = "partially_covered"
+		}
+	}
 }
 
 func roleName(class semantic.ClassOp) string {
