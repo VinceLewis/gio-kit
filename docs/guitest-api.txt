@@ -41,12 +41,55 @@ var ErrOutputLimit = errors.New("guitest: diagnostic output exceeds byte limit")
 
 FUNCTIONS
 
+func AssertGoldenDump(t FailureReporter, dump Dump, path string)
+    AssertGoldenDump compares dump against the checked-in JSON file at path,
+    byte-for-byte after canonical re-marshalling (so an existing file written
+    by a different DumpOptions/field order still compares meaningfully).
+    Per gio-json-test-upgrade-plan.md item 8's resolved decision, this is
+    deliberately a plain checked-in testdata file reviewed via `git diff`, not
+    a dedicated golden-diff tool — a mismatch's failure message includes both
+    documents so the reviewer can already see the diff shape via git status,
+    and re-running with GUITEST_UPDATE_GOLDEN=1 writes the new baseline.
+
+    A golden dump proves the tree shape did not change; it must never be the
+    sole assertion for a behavioral change (per the same plan section) since a
+    meaningless whitespace-only diff is just as loud as a real regression.
+
 func JSONSchema() []byte
     JSONSchema generates the version-1 schema from public dump types. The
     checked-in schema is verified against this output by the core tests.
 
 
 TYPES
+
+type AccessibilityViolation struct {
+	NodeID string
+	Rule   string
+	Detail string
+}
+    AccessibilityViolation describes one rule a captured node broke against the
+    default baseline check (gio-json-test-upgrade-plan.md item 3).
+
+func CheckAccessibility(nodes []FrameNode, pxPerDp float32, minTouchTargetDp float32) []AccessibilityViolation
+    CheckAccessibility runs the baseline checks against already-captured nodes:
+    every interactable node must have a non-empty accessible name somewhere in
+    its own ancestor or descendant chain. gio-kit's widgets name a composite
+    control from either direction: material.Button wraps a labeled text leaf
+    in unlabeled outer Clickable/click-target ancestors, so the name must be
+    found on a descendant; accessibility.Group instead names an outer scope
+    around an unlabeled input leaf (e.g. grid's selection checkbox), so the name
+    must be found on an ancestor. Gio's own widget.List scrollbar track/thumb
+    register a ClickGesture with no name in either direction and cannot yet
+    be distinguished structurally from a genuine app-level defect; this is why
+    DumpOptions.CheckAccessibility defaults to off instead of the plan's target
+    opt-out default (see https://github.com/VinceLewis/gio-kit/issues/2). A
+    real accessibility tree resolves the name the same either way, so requiring
+    every individual node to carry its own label would be a false positive,
+    not a real gap. When minTouchTargetDp > 0, every interactable node must
+    also be at least that large in both dimensions. pxPerDp <= 0 is treated as 1
+    (already the Driver's own fallback for an invalid metric).
+
+func (v AccessibilityViolation) String() string
 
 type Bounds struct {
 	X      int `json:"x"`
@@ -266,6 +309,21 @@ type DumpOptions struct {
 	Component                                               string
 	Request                                                 diagnostic.Request
 	Redact                                                  func(path, value string) string
+	// CheckAccessibility runs the default accessible-name check (see
+	// ErrAccessibilityViolations) when true. gio-json-test-upgrade-plan.md
+	// item 3 calls for this to be opt-out (on unless suppressed), but it is
+	// currently opt-in: gioui.org/widget.List's built-in scrollbar produces
+	// unlabeled clickable nodes in every list/grid, indistinguishable from a
+	// genuine app-level naming gap by any FrameNode field, so a hard default
+	// today would fail on gio-kit's own internals rather than an app defect.
+	// See the filed gio-kit issue tracking that blocker. Until it is
+	// resolved, tests that want the check opt in explicitly.
+	CheckAccessibility bool
+	// MinTouchTargetDp additionally enforces a minimum interactable node
+	// size when > 0. It defaults to 0 (disabled) because gio-kit's current
+	// widget sizing does not uniformly meet any single minimum yet; see
+	// CheckAccessibility's doc comment.
+	MinTouchTargetDp float32
 }
     DumpOptions can tighten hard limits but cannot disable redaction.
     Redact supplies additional string redaction after safe defaults. Component
@@ -279,6 +337,23 @@ type Environment struct {
 }
     Environment supplies the platform services replaced by an in-process test.
     Applications keep their own storage, theme, records, and application policy.
+
+type ErrAccessibilityViolations struct {
+	Violations []AccessibilityViolation
+}
+    ErrAccessibilityViolations is returned by Capture/DumpJSON when the
+    default accessibility check finds a violation and DumpOptions did
+    not opt out. It is deliberately a hard failure, not a warning: per
+    gio-json-test-upgrade-plan.md's consensus, the instruction this enables is
+    "do not suppress it," not "remember to call it."
+
+func (e *ErrAccessibilityViolations) Error() string
+
+type FailureReporter interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+    FailureReporter is the subset of *testing.T golden-file assertions need.
 
 type FrameNode struct {
 	ID                   string   `json:"id"`
@@ -470,9 +545,46 @@ var ErrUnavailable = errors.New("guitest: headless screenshot unavailable")
 
 FUNCTIONS
 
+func CompareGolden(t GoldenReporter, d *guitest.Driver, path string, pixelTolerance uint8, tolerance float64)
+    CompareGolden renders d's current frame and compares it against the
+    checkpoint PNG at path, failing if more than tolerance fraction of
+    pixels differ by more than pixelTolerance per channel (see Difference).
+    Per gio-json-test-upgrade-plan.md item 9's resolved decision, this is
+    scoped to a handful of explicitly named checkpoints, not a general
+    screenshot-everything mode — callers pick which screens are worth pinning a
+    reference image for.
+
+    On a build without the guitestgpu tag, rendering is unavailable
+    (ErrUnavailable) and this call is skipped rather than failed, matching
+    Save/OnFailure's existing behavior elsewhere in this package: a golden pixel
+    checkpoint is an extra guard, never the only signal a screen is correct,
+    so an environment that cannot render must not block the rest of the suite.
+
 func Difference(a, b image.Image, tolerance uint8) (float64, error)
     Difference returns the fraction of pixels with any RGBA channel difference
     above tolerance. Geometry mismatches are errors, not scaled comparisons.
+
+func NodeColors(img image.Image, nodes []guitest.FrameNode) (map[string]NodeColor, error)
+    NodeColors estimates Background/Foreground for every node whose Bounds are
+    non-empty and fully within img (typically the result of capture(d) for the
+    same frame the nodes were captured from).
+
+    gio-json-test-upgrade-plan.md item 4 originally specified reading
+    paint.ColorOp/paint.LinearGradientOp directly at capture time. That is not
+    implementable through Gio's public API: op.Ops has no exported reader,
+    and gioui.org/io/input.SemanticDesc carries no tag or op-offset linking a
+    semantic node back to the paint ops that drew it (confirmed by inspecting
+    gioui.org's io/input and op packages — the offset/tag correlation lives
+    only in Gio's internal ops decoder). Pixel-sampling the actual rendered
+    frame is the closest achievable equivalent: it needs no Gio internals,
+    reuses the same headless GPU path Save/WritePNG already use, and reflects
+    the true composited color (after theme, opacity and gradients) rather
+    than a single raw ColorOp, which is arguably the more useful signal for
+    a test asking "does this look right" anyway. The tradeoff is precision:
+    this is a statistical estimate over a rectangle, not an exact color read,
+    so a node with low-contrast or highly detailed content (e.g. a photo) may
+    produce a noisy Foreground estimate. Treat NodeColors as a coarse regression
+    signal (did the theme change unexpectedly?), not a color-correctness oracle.
 
 func OnFailure(t FailureReporter, d *guitest.Driver, base string, options guitest.DumpOptions)
     OnFailure registers artifact capture. Register it after Driver.Close cleanup
@@ -495,6 +607,31 @@ type FailureReporter interface {
 	Failed() bool
 	Logf(string, ...any)
 }
+
+type GoldenReporter interface {
+	Helper()
+	Fatalf(format string, args ...any)
+	Skipf(format string, args ...any)
+}
+    GoldenReporter is the subset of *testing.T golden-checkpoint assertions
+    need.
+
+type NodeColor struct {
+	// Background is the modal color of the node's own border pixels (its
+	// Bounds rectangle's edge, 1px in from each side): the pixels least
+	// likely to be covered by the node's own foreground content (text
+	// glyphs, an icon's ink) and most likely to be its fill/background.
+	Background color.NRGBA
+	// Foreground is the modal color among the node's interior pixels that
+	// differs from Background, or equal to Background when the interior is
+	// uniform (a plain-filled node with no distinct foreground content,
+	// e.g. an unlabeled color swatch).
+	Foreground color.NRGBA
+}
+    NodeColor is a per-node color estimate from a rendered frame (see
+    NodeColors' doc comment for why this samples pixels rather than
+    instrumenting paint ops, the approach gio-json-test-upgrade-plan.md item 4
+    originally specified).
 
 package script // import "github.com/VinceLewis/gio-kit/guitest/script"
 

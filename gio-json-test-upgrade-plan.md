@@ -215,7 +215,7 @@ there, so it does not need to be kept in sync after the checks land.
 
 ## Gio-Kit implementation
 
-### Done (items 1, 2, 5, 6, 10 above, item 3 partially)
+### Done (items 1, 2, 5, 6, 8, 10 above, items 3 and 4 partially)
 
 1. `guitest/schema.go`: `columnHeader`, `card`, `picker`, `tab`, `dialog`,
    `drawer` added to the `role` enum choices. `gioui.org/io/semantic` has no
@@ -258,6 +258,46 @@ there, so it does not need to be kept in sync after the checks land.
    contingent on that issue's resolution. Covered by
    `guitest/accessibility_check_test.go`.
 
+8. **Item 4 — per-node color, partial/deviated.** `guitest/screenshot/color.go`:
+   `NodeColors(img, nodes)` estimates `Background`/`Foreground` per node by
+   pixel-sampling a rendered frame (border pixels for background, the modal
+   non-background interior pixel for foreground), not by instrumenting
+   `paint.ColorOp`/`paint.LinearGradientOp` as originally specified. That
+   approach is not implementable through Gio's public API: `op.Ops` has no
+   exported reader, and `input.SemanticDesc` carries no tag or op-offset
+   linking a semantic node back to the ops that drew it (confirmed against
+   gioui.org's `io/input` and `op` packages — the correlation lives only in
+   Gio's internal ops decoder). Pixel-sampling the real rendered output needs
+   no Gio internals and reflects the true composited color; the tradeoff is a
+   statistical estimate over a rectangle rather than an exact color read.
+   Lives in `guitest/screenshot` (not `guitest/dump.go`) since it requires
+   the same `guitestgpu`-tagged headless render `Save`/`WritePNG` already
+   use, keeping the core `guitest` package graphics-free by default. Covered
+   by `guitest/screenshot/color_test.go` (synthetic images; does not need a
+   GPU to test the estimator itself).
+9. **Item 8 — golden dumps.** `guitest.AssertGoldenDump(t, dump, path)`:
+   compares a captured `Dump` against a checked-in JSON file, byte-for-byte
+   after canonical re-marshalling; `GUITEST_UPDATE_GOLDEN=1 go test ./...`
+   regenerates every golden file in one run (an env var, not a `-update`
+   flag, so multiple packages calling it don't collide on flag
+   registration). Reviewed via `git diff`, per the resolved decision; never
+   the sole assertion for a behavioral change, per the doc comment. Covered
+   by `guitest/golden_test.go`.
+10. **Item 9 — GPU diffing.** `guitest/screenshot.CompareGolden(t, d, path,
+    pixelTolerance, tolerance)`: renders the current frame (via the existing
+    `guitestgpu`-tagged `capture`) and compares it against a checkpoint PNG
+    using the existing `Difference` tolerance-based comparison, scoped to
+    whatever handful of checkpoints a caller names (not a
+    screenshot-everything mode). Skips (not fails) when rendering is
+    unavailable, matching `Save`/`OnFailure`'s existing behavior, since a
+    pixel checkpoint must never be the only signal blocking the rest of a
+    suite in a no-GPU environment. Shares the same `GUITEST_UPDATE_GOLDEN`
+    env var as item 8. Covered by `guitest/screenshot/golden_test.go`
+    (exercises the create/skip paths; the compare-mismatch path needs an
+    actual GPU build and could not be verified in this environment — see
+    `tools/test-termux.sh`'s Vulkan-less Termux constraint, pre-existing and
+    unrelated to this change).
+
 **Known limitation, not yet fixed**: role/error/reason population above has
 no structural link from a semantic node to its owning component — it matches
 on label text (the same pattern `sensitiveLabels` already used), which is a
@@ -272,27 +312,18 @@ general label-matching fragility for other components (form/shell/picker/
 dialog) remains open; a real provider→node ownership link would need a new
 `diagnostic` API and is out of scope here.
 
-### Remaining (items 4, 7, 8, 9 above, item 3's opt-out flip) — product decisions resolved, not yet implemented
-
-The product owner has resolved all five open decisions; the items below are
-now unblocked and ready to implement in gio-kit:
+### Remaining (item 7 above, item 3's opt-out flip) — product decisions resolved, not yet implemented
 
 7. **Item 3 — flip to opt-out by default.** Blocked on
    https://github.com/VinceLewis/gio-kit/issues/2 (Gio's `widget.List`
    scrollbar has no accessible name); the accessible-name/touch-target checks
    themselves are already implemented and opt-in — see "Done" above.
-8. **Item 4 — per-node color.** Capture `Foreground`/`Background` by
-   instrumenting Gio paint ops (decision: read `paint.ColorOp`/
-   `paint.LinearGradientOp` at capture time, not a separate theme-introspection
-   path), scoped to text/icon nodes.
-9. **Item 7 — reachability generator.** Scope the seeded property-based
+8. **Item 7 — reachability generator.** Scope the seeded property-based
    generator to field types and view kinds only (decision: not full ADL
    operation semantics) — "every declared, policy-permitted operation has
    exactly one reachable, distinctly-labeled control across all four
-   responsive cases," fixed seed set, shrink-on-failure.
-10. **Item 8 — golden dumps.** Plain checked-in `testdata` JSON files,
-    reviewed via `git diff` (decision: no dedicated golden-diff tool) — never
-    the sole assertion for a change, per the existing consensus text above.
-11. **Item 9 — GPU diffing.** Limit `guitestgpu` perceptual diffing to a
-    handful of explicitly named checkpoints (decision: not a general
-    screenshot-everything mode), tolerance-based comparison, staged last.
+   responsive cases," fixed seed set, shrink-on-failure. This one lives in
+   adl-gio (it needs ADL model concepts — field types, view kinds,
+   policy-permitted operations — that gio-kit's generic `guitest` layer has
+   no visibility into), not gio-kit; see adl-gio's copy of this plan /
+   `cmd/client` for its implementation once it lands.

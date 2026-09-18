@@ -92,10 +92,17 @@ implemented. Item 3 (accessible-name check) is also implemented but is
 defaults to `false` because Gio's own `widget.List` scrollbar produces
 unlabeled-but-clickable nodes that cannot yet be distinguished structurally
 from a genuine app-level accessibility defect (see
-https://github.com/VinceLewis/gio-kit/issues/2). Per-node foreground/background
-color (item 4), the reachability property-test generator (item 7), golden
-dumps (item 8), and `guitestgpu` perceptual diffing (item 9) referenced below
-are not implemented yet and remain future work from the same plan.
+https://github.com/VinceLewis/gio-kit/issues/2). Item 4 (per-node color) is
+implemented as `guitest/screenshot.NodeColors`, but pixel-samples a rendered
+frame rather than instrumenting paint ops as originally specified — Gio's
+public API exposes neither an op reader nor a semantic-node-to-op-offset
+link, so op-level instrumentation is not implementable without patching Gio
+itself. Golden dumps (item 8, `guitest.AssertGoldenDump`) and `guitestgpu`
+perceptual diffing (item 9, `guitest/screenshot.CompareGolden`) are both
+implemented. The reachability property-test generator (item 7) is not
+implemented in gio-kit — it needs ADL-specific concepts (field types, view
+kinds, policy-permitted operations) this repo has no visibility into, so it
+belongs in adl-gio instead.
 
 1. Any new or changed screen must call `assertTreeShape` (ADL-Gio's helper,
    once landed in `harness_support_test.go`) across all four responsive
