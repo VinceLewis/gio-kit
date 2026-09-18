@@ -84,14 +84,18 @@ installation/signing behavior, ANRs, and visual quality.
 
 `gio-json-test-upgrade-plan.md`'s five-item checklist below describes the
 target end state for `guitest`-based tests. Of the schema groundwork it
-depends on, only items 1, 2, 5, 6, and 10 from that plan's expert-panel list
-(real `Coverage` occlusion, the `Role` enum extension, per-node
+depends on, items 1, 2, 5, 6, and 10 from that plan's expert-panel list (real
+`Coverage` occlusion, the `Role` enum extension, per-node
 validation/disabled-reason fields, and the `FocusOrder` field) are
-implemented so far; the default accessibility check (item 3), per-node
-foreground/background color (item 4), the reachability property-test
-generator (item 7), golden dumps (item 8), and `guitestgpu` perceptual
-diffing (item 9) referenced below are not implemented yet and remain future
-work from the same plan.
+implemented. Item 3 (accessible-name check) is also implemented but is
+**opt-in**, not the plan's target opt-out default: `DumpOptions.CheckAccessibility`
+defaults to `false` because Gio's own `widget.List` scrollbar produces
+unlabeled-but-clickable nodes that cannot yet be distinguished structurally
+from a genuine app-level accessibility defect (see
+https://github.com/VinceLewis/gio-kit/issues/2). Per-node foreground/background
+color (item 4), the reachability property-test generator (item 7), golden
+dumps (item 8), and `guitestgpu` perceptual diffing (item 9) referenced below
+are not implemented yet and remain future work from the same plan.
 
 1. Any new or changed screen must call `assertTreeShape` (ADL-Gio's helper,
    once landed in `harness_support_test.go`) across all four responsive

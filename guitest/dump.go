@@ -27,6 +27,21 @@ type DumpOptions struct {
 	Component                                               string
 	Request                                                 diagnostic.Request
 	Redact                                                  func(path, value string) string
+	// CheckAccessibility runs the default accessible-name check (see
+	// ErrAccessibilityViolations) when true. gio-json-test-upgrade-plan.md
+	// item 3 calls for this to be opt-out (on unless suppressed), but it is
+	// currently opt-in: gioui.org/widget.List's built-in scrollbar produces
+	// unlabeled clickable nodes in every list/grid, indistinguishable from a
+	// genuine app-level naming gap by any FrameNode field, so a hard default
+	// today would fail on gio-kit's own internals rather than an app defect.
+	// See the filed gio-kit issue tracking that blocker. Until it is
+	// resolved, tests that want the check opt in explicitly.
+	CheckAccessibility bool
+	// MinTouchTargetDp additionally enforces a minimum interactable node
+	// size when > 0. It defaults to 0 (disabled) because gio-kit's current
+	// widget sizing does not uniformly meet any single minimum yet; see
+	// CheckAccessibility's doc comment.
+	MinTouchTargetDp float32
 }
 
 func (o DumpOptions) bounded() DumpOptions {
@@ -381,6 +396,11 @@ func (d *Driver) Capture(options DumpOptions) (Dump, error) {
 		result.FocusOrder[i] = node.ID
 	}
 	computeCoverage(result.Nodes)
+	if o.CheckAccessibility {
+		if violations := CheckAccessibility(result.Nodes, result.Metrics["pxPerDp"], o.MinTouchTargetDp); len(violations) > 0 {
+			return Dump{}, &ErrAccessibilityViolations{Violations: violations}
+		}
+	}
 	// Apply the byte cap to Capture as well as DumpJSON. No partial dump escapes.
 	data, err := json.Marshal(result)
 	if err != nil {

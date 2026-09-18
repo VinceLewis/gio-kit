@@ -215,7 +215,7 @@ there, so it does not need to be kept in sync after the checks land.
 
 ## Gio-Kit implementation
 
-### Done (items 1, 2, 5, 6, 10 above)
+### Done (items 1, 2, 5, 6, 10 above, item 3 partially)
 
 1. `guitest/schema.go`: `columnHeader`, `card`, `picker`, `tab`, `dialog`,
    `drawer` added to the `role` enum choices. `gioui.org/io/semantic` has no
@@ -242,6 +242,21 @@ there, so it does not need to be kept in sync after the checks land.
    regenerated, `guitest/dump_test.go` updated for the new fields.
 6. `gio-playwright.md`'s "Required checks" section added, byte-identical in
    both repos.
+7. `guitest/accessibility_check.go`: `CheckAccessibility` implements the
+   accessible-name rule (bidirectional ancestor/descendant name propagation,
+   covering both `material.Button`'s labeled-descendant pattern and
+   `accessibility.Group`'s labeled-ancestor pattern) and an opt-in minimum
+   touch-target-size rule. Wired into `Capture` via
+   `DumpOptions.CheckAccessibility`/`MinTouchTargetDp`. **Deviation from the
+   resolved decision below: this ships opt-in (default `false`), not
+   opt-out-by-default**, because Gio's own `widget.List` scrollbar
+   track/thumb register a `ClickGesture` with no accessible name in either
+   direction and cannot yet be distinguished structurally from a genuine
+   app-level defect — enabling it by default fails on every scrollable
+   screen. Tracked at
+   https://github.com/VinceLewis/gio-kit/issues/2; flipping to opt-out is
+   contingent on that issue's resolution. Covered by
+   `guitest/accessibility_check_test.go`.
 
 **Known limitation, not yet fixed**: role/error/reason population above has
 no structural link from a semantic node to its owning component — it matches
@@ -257,15 +272,15 @@ general label-matching fragility for other components (form/shell/picker/
 dialog) remains open; a real provider→node ownership link would need a new
 `diagnostic` API and is out of scope here.
 
-### Remaining (items 3, 4, 7, 8, 9 above) — product decisions resolved, not yet implemented
+### Remaining (items 4, 7, 8, 9 above, item 3's opt-out flip) — product decisions resolved, not yet implemented
 
 The product owner has resolved all five open decisions; the items below are
 now unblocked and ready to implement in gio-kit:
 
-7. **Item 3 — default accessibility check.** `guitest.AssertAccessible` runs
-   opt-out by default on every `Capture`/`DumpJSON` (decision: opt-out, not
-   opt-in) — minimum touch-target size from `Bounds`, non-empty accessible
-   name for interactable nodes, and (once item 4 lands) contrast.
+7. **Item 3 — flip to opt-out by default.** Blocked on
+   https://github.com/VinceLewis/gio-kit/issues/2 (Gio's `widget.List`
+   scrollbar has no accessible name); the accessible-name/touch-target checks
+   themselves are already implemented and opt-in — see "Done" above.
 8. **Item 4 — per-node color.** Capture `Foreground`/`Background` by
    instrumenting Gio paint ops (decision: read `paint.ColorOp`/
    `paint.LinearGradientOp` at capture time, not a separate theme-introspection
